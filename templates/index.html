@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky13 Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #343a40;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 2rem;
+        }
+        .container {
+            width: 80%;
+            margin: 30px auto;
+        }
+        .card {
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+        }
+        .card h3 {
+            margin: 0;
+            font-weight: 500;
+        }
+        .card p {
+            font-weight: 400;
+            color: #555;
+        }
+        .balance, .trades {
+            display: flex;
+            justify-content: space-between;
+        }
+        .trade-item {
+            background-color: #f1f1f1;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .trade-item span {
+            font-weight: 500;
+        }
+        .trade-item.success {
+            background-color: #28a745;
+        }
+        .trade-item.failure {
+            background-color: #dc3545;
+        }
+        #chart {
+            width: 100%;
+            height: 300px;
+        }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .start-button {
+            background-color: #6f42c1; /* Donkerpaars voor starten */
+        }
+        .stop-button {
+            background-color: #000; /* Zwart voor stoppen */
+        }
+        /* Navigation styles */
+        #nav {
+            list-style: none;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            background-color: #343a40;
+            margin: 0;
+        }
+        #nav li {
+            margin: 10px;
+        }
+        #nav li a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 10px;
+        }
+        #nav li a:hover {
+            background-color: #0056b3;
+            border-radius: 5px;
+        }
+        #settings-content {
+            display: none;
+        }
+        /* Form styling */
+        form input {
+            padding: 10px;
+            margin: 5px 0;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        form button {
+            background-color: #28a745;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    Lucky13 - Trading Dashboard
+</header>
+
+<div class="container">
+    <!-- Navigation Bar -->
+    <ul id="nav">
+        <li><a href="#" id="home-tab">Home</a></li>
+        <li><a href="#" id="settings-tab">Settings</a></li>
+    </ul>
+    
+    <!-- Home Tab Content -->
+    <div id="home-content">
+        <h2>Dashboard</h2>
+
+        <div class="card">
+            <h3>Account Balance</h3>
+            <p id="balance">Loading...</p>
+        </div>
+
+        <div class="card">
+            <h3>Active Trades</h3>
+            <div id="trades-list">
+                <p>Loading active trades...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Trading Performance</h3>
+            <div id="chart"></div>
+        </div>
+
+        <div class="button-container">
+            <button class="start-button" onclick="startBot()">Start Bot</button>
+            <button class="stop-button" onclick="stopBot()">Stop Bot</button>
+        </div>
+    </div>
+
+    <!-- Settings Tab Content -->
+    <div id="settings-content">
+        <h2>Bot Instellingen</h2>
+        <form id="settings-form">
+            <label for="trade-percentage">Trade Percentage: </label>
+            <input type="number" id="trade-percentage" name="trade_percentage" step="0.01" required><br><br>
+
+            <label for="stop-loss-percentage">Stop Loss Percentage: </label>
+            <input type="number" id="stop-loss-percentage" name="stop_loss_percentage" step="0.01" required><br><br>
+
+            <label for="take-profit-percentage">Take Profit Percentage: </label>
+            <input type="number" id="take-profit-percentage" name="take_profit_percentage" step="0.01" required><br><br>
+
+            <button type="submit">Opslaan</button>
+        </form>
+    </div>
+</div>
+
+<!-- Include Socket.IO -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+    const socket = io.connect("http://localhost:5000");
+
+    // Update the balance in real-time
+    socket.on('update_balance', function(data) {
+        document.getElementById("balance").innerHTML = `Balance: ${data.balance} USDT`;
+    });
+
+    // Update the active trades in real-time
+    socket.on('update_trades', function(data) {
+        let tradesList = document.getElementById("trades-list");
+        tradesList.innerHTML = '';
+        data.trades.forEach(trade => {
+            const tradeDiv = document.createElement('div');
+            tradeDiv.classList.add('trade-item');
+            tradeDiv.classList.add(trade.current_profit > 0 ? 'success' : 'failure');
+            tradeDiv.innerHTML = `
+                <span>${trade.symbol}</span>
+                <span>${trade.current_profit > 0 ? '+' : ''}${(trade.current_profit * 100).toFixed(2)}%</span>
+            `;
+            tradesList.appendChild(tradeDiv);
+        });
+    });
+
+    // Function to start the bot
+    function startBot() {
+        fetch('/start-bot', {
+            method: 'POST'
+        }).then(response => response.json())
+          .then(data => alert(data.status));
+    }
+
+    // Function to stop the bot
+    function stopBot() {
+        fetch('/stop-bot', {
+            method: 'POST'
+        }).then(response => response.json())
+          .then(data => alert(data.status));
+    }
+
+    // Tab switching logic
+    document.addEventListener("DOMContentLoaded", function () {
+        // Home and Settings tab switching
+        document.getElementById("home-tab").addEventListener("click", function() {
+            document.getElementById("home-content").style.display = "block";
+            document.getElementById("settings-content").style.display = "none";
+        });
+
+        document.getElementById("settings-tab").addEventListener("click", function() {
+            document.getElementById("home-content").style.display = "none";
+            document.getElementById("settings-content").style.display = "block";
+            loadSettings();
+        });
+
+        // Settings form submission
+        document.getElementById("settings-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            const settings = {
+                trade_percentage: parseFloat(document.getElementById("trade-percentage").value),
+                stop_loss_percentage: parseFloat(document.getElementById("stop-loss-percentage").value),
+                take_profit_percentage: parseFloat(document.getElementById("take-profit-percentage").value)
+            };
+
+            fetch("/api/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+            })
+            .catch(error => {
+                console.error("Error updating settings:", error);
+            });
+        });
+
+        // Load settings when the settings tab is clicked
+        function loadSettings() {
+            fetch("/api/settings")
+                .then(response => response.json())
+                .then(settings => {
+                    document.getElementById("trade-percentage").value = settings.trade_percentage || 0.02;
+                    document.getElementById("stop-loss-percentage").value = settings.stop_loss_percentage || 0.03;
+                    document.getElementById("take-profit-percentage").value = settings.take_profit_percentage || 0.05;
+                })
+                .catch(error => {
+                    console.error("Error loading settings:", error);
+                });
+        }
+    });
+</script>
+
+</body>
+</html>

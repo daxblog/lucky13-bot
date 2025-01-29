@@ -32,7 +32,7 @@ def send_notification(message_type, message):
     if settings.get(message_type, False):
         socketio.emit('new_notification', {'type': message_type, 'message': message})
 
-# 📌 Verbinding maken met Bybit API
+# 📌 Verbinding maken met Bybit API via ccxt
 def connect_to_bybit():
     """Verbind met Bybit via ccxt"""
     api_key = 'BlgHo4zOTHeThKDWsj'  # Vul je eigen API-key in
@@ -52,16 +52,27 @@ def get_current_price(symbol):
     ticker = exchange.fetch_ticker(symbol)
     return ticker['last']  # Laatste prijs
 
-# 📌 Functie om accountbalans op te halen van Bybit
+# 📌 Functie om accountbalans op te halen van Bybit via ccxt
 def fetch_account_balance():
-    """Haal de echte accountbalans op van Bybit"""
+    """Haal de accountbalans op van Bybit via ccxt"""
     exchange = connect_to_bybit()
-    balance = exchange.fetch_balance()
-    return {'total': {'USDT': balance['total']['USDT']}}  # Toon alleen USDT-balans
+    try:
+        balance = exchange.fetch_balance()  # Haal de balans op via ccxt
 
-# 📌 Functie om actieve trades op te halen van Bybit
+        if 'total' in balance and 'USDT' in balance['total']:
+            usdt_balance = balance['total']['USDT']  # Haal het USDT saldo op
+            print(f"Beschikbaar USDT saldo: {usdt_balance}")
+            return {'total': {'USDT': usdt_balance}}  # Retourneer het saldo in het gewenste formaat
+        else:
+            print("Saldo USDT niet gevonden.")
+            return {'total': {'USDT': 0}}  # Foutafhandelingsmechanisme
+    except Exception as e:
+        print(f"Fout bij het ophalen van saldo: {e}")
+        return {'total': {'USDT': 0}}  # Return een foutmechanisme
+
+# 📌 Functie om actieve trades op te halen van Bybit via ccxt
 def get_active_trades():
-    """Haal de actieve trades op van Bybit"""
+    """Haal de actieve trades op van Bybit via ccxt"""
     exchange = connect_to_bybit()
     active_trades = exchange.fetch_open_orders(symbol='BTC/USDT')  # Haal actieve orders op voor BTC/USDT
     trades = []
@@ -73,9 +84,9 @@ def get_active_trades():
         })
     return trades
 
-# 📌 Plaats een echte koop- of verkooporder op Bybit
+# 📌 Plaats een echte koop- of verkooporder op Bybit via ccxt
 def place_order(symbol, side, amount):
-    """Plaats een order op Bybit"""
+    """Plaats een order op Bybit via ccxt"""
     exchange = connect_to_bybit()
     
     if side == 'buy':

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
+from flask_cors import CORS  # Importeer CORS
 import os
 import time
 import random
@@ -8,7 +9,11 @@ import threading
 
 # Initialiseer Flask en SocketIO
 app = Flask(__name__)  # Correcte initialisatie
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Voeg CORS toe aan je app om cross-origin verzoeken toe te staan
+CORS(app)  # Hiermee worden alle origin-toegang toegestaan
+
+socketio = SocketIO(app, cors_allowed_origins="*")  # Hiermee configureer je de SocketIO connectie
 
 # Bestandsnaam voor de configuratie
 CONFIG_FILE = "config.json"

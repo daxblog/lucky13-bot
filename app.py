@@ -118,5 +118,8 @@ def update_settings():
     return jsonify({"message": "Instellingen bijgewerkt!"})
 
 if __name__ == "__main__":  # Correct gebruik van __name__
-    # Start de Flask server met SocketIO
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    # Verkrijg de poort uit de omgevingsvariabelen van Heroku (of gebruik 5000 als fallback)
+    port = int(os.environ.get("PORT", 5000))
+
+    # Start de Flask server met SocketIO en dynamische poort
+    socketio.run(app, host="0.0.0.0", port=port, debug=True)

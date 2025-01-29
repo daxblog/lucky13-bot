@@ -1,2 +1,2 @@
-web: python lucky13.py
+web: node server.js
 

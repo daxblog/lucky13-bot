@@ -54,33 +54,36 @@ function showErrorMessages(messages) {
 function updateGraph(winnings, deposits) {
     if (chartContainer) {
         if (balanceChart) {
-            balanceChart.destroy(); // Verwijder de bestaande grafiek om duplicatie te voorkomen
-        }
+            // Update de bestaande grafiek als deze er al is
+            balanceChart.data.datasets[0].data = [winnings, deposits];
+            balanceChart.update();
+        } else {
+            // Maak een nieuwe grafiek aan
+            const ctx = chartContainer.getContext("2d");
+            const chartData = {
+                labels: ['Winsten', 'Stortingen'],  // Labels voor de grafiek
+                datasets: [{
+                    label: 'USDT',
+                    data: [winnings, deposits],  // Gegevens voor winsten en stortingen
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderColor: ['#28a745', '#dc3545'],
+                    borderWidth: 1
+                }]
+            };
 
-        const ctx = chartContainer.getContext("2d");
-        const chartData = {
-            labels: ['Winsten', 'Stortingen'],  // Labels voor de grafiek
-            datasets: [{
-                label: 'USDT',
-                data: [winnings, deposits],  // Gegevens voor winsten en stortingen
-                backgroundColor: ['#28a745', '#dc3545'],
-                borderColor: ['#28a745', '#dc3545'],
-                borderWidth: 1
-            }]
-        };
-
-        balanceChart = new Chart(ctx, {
-            type: 'bar',
-            data: chartData,
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
+            balanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
                     }
-                }
+                });
             });
-        });
+        }
     }
 }
 
@@ -93,14 +96,29 @@ function updateBotStatus(isRunning) {
 }
 
 // Socket.io event handlers
-socket.on('update_balance', updateBalance);
-socket.on('update_trades', updateActiveTrades);
-socket.on('update_graph', (data) => updateGraph(data.winnings, data.deposits));  // Update de grafiek met winsten en stortingen
-socket.on('error_messages', showErrorMessages);
+socket.on('update_balance', function(data) {
+    console.log("Balance update ontvangen:", data);  // Debugging log
+    updateBalance(data);
+});
+
+socket.on('update_trades', function(data) {
+    console.log("Active trades update ontvangen:", data);  // Debugging log
+    updateActiveTrades(data);
+});
+
+socket.on('update_graph', function(data) {
+    console.log("Graph update ontvangen:", data);  // Debugging log
+    updateGraph(data.winnings, data.deposits);  // Update de grafiek met winsten en stortingen
+});
+
+socket.on('error_messages', function(data) {
+    console.log("Foutmelding ontvangen:", data);  // Debugging log
+    showErrorMessages(data);
+});
 
 // Bot status event
 socket.on('bot_status', function(data) {
-    console.log("Bot status ontvangen:", data);  // Voeg deze regel toe voor debugging
+    console.log("Bot status ontvangen:", data);  // Debugging log
     if (data && data.hasOwnProperty('running')) {
         updateBotStatus(data.running);
     } else {
@@ -140,9 +158,6 @@ const exportButton = document.getElementById("exportChart");
 if (exportButton) {
     exportButton.addEventListener("click", exportChartToCSV);
 }
-
-// Verwijder de functies voor het starten en stoppen van de bot
-// Deze knoppen zijn niet meer nodig in de nieuwe versie van de interface
 
 // Instellingen tabbladen wisselen
 document.addEventListener("DOMContentLoaded", function () {

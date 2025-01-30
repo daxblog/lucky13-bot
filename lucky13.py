@@ -49,14 +49,23 @@ def connect_to_bybit():
     api_key = os.getenv("BYBIT_API_KEY")
     api_secret = os.getenv("BYBIT_API_SECRET")
 
+    # Log de API-sleutels om te controleren of ze goed geladen worden
+    logging.info(f"API Key: {api_key}")
+    logging.info(f"API Secret: {api_secret}")
+
     if not api_key or not api_secret:
         logging.error("API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
         sys.exit(1)
 
-    return ccxt.bybit({
-        'apiKey': api_key,
-        'secret': api_secret,
-    })
+    try:
+        exchange = ccxt.bybit({
+            'apiKey': api_key,
+            'secret': api_secret,
+        })
+        return exchange
+    except Exception as e:
+        logging.error(f"Fout bij verbinden met Bybit API: {e}")
+        sys.exit(1)
 
 # Functie om accountbalans op te halen
 def fetch_account_balance():

@@ -9,6 +9,7 @@ import logging
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
+import eventlet  # Voeg eventlet toe om te zorgen voor betere concurrency met SocketIO
 
 # Logging setup
 LOG_FILE = "app.log"
@@ -24,7 +25,7 @@ logging.basicConfig(
 # Flask en SocketIO setup
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")  # Gebruik eventlet voor concurrency
 
 # Variabelen
 BOT_PROCESS = None  
@@ -114,8 +115,8 @@ def stop_bot():
         return jsonify({"status": "Bot is not running!"})
 
     try:
-        os.kill(BOT_PROCESS.pid, signal.SIGTERM)
-        BOT_PROCESS.wait()
+        BOT_PROCESS.terminate()  # Gebruik terminate() in plaats van os.kill voor een schonere afsluiting
+        BOT_PROCESS.wait()  # Wacht tot het proces is beëindigd
         BOT_PROCESS = None
         logging.info("Bot gestopt.")
         return jsonify({"status": "Bot stopped successfully!"})
@@ -161,4 +162,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     update_dashboard_periodically()
     logging.info("Server gestart op poort %d", port)
-    socketio.run(app, host="0.0.0.0", port=port, debug=False)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)  # Zorg ervoor dat debug=False is in productie

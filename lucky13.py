@@ -3,7 +3,6 @@ import random
 import os
 import signal
 import sys
-import threading
 import json
 import ccxt
 import logging
@@ -15,10 +14,11 @@ import eventlet.wsgi
 # Logging setup
 DEBUG_MODE = False  # Zet op True voor gedetailleerde logs
 LOG_FILE = "bot.log"
+
 logging.basicConfig(
-    filename=LOG_FILE if not DEBUG_MODE else None,
     level=logging.DEBUG if DEBUG_MODE else logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_FILE)]
 )
 
 # Flask setup
@@ -46,9 +46,13 @@ signal.signal(signal.SIGINT, handle_exit)
 
 # Verbinding maken met Bybit API
 def connect_to_bybit():
-    api_key = 'BlgHo4zOTHeThKDWsj'  
-    api_secret = 'cWwuFxIBZLzyBWJ4NrWpkIY5RS18O3Mns3DR'  
-    
+    api_key = os.getenv("BYBIT_API_KEY")
+    api_secret = os.getenv("BYBIT_API_SECRET")
+
+    if not api_key or not api_secret:
+        logging.error("❌ API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
+        sys.exit(1)
+
     return ccxt.bybit({
         'apiKey': api_key,
         'secret': api_secret,
@@ -81,6 +85,8 @@ def get_current_price(symbol):
 # Trading-logica
 def start_bot():
     global running
+    logging.info("🚀 Trading bot gestart en actief...")
+
     open_trades = {}
     while running:
         symbol = random.choice(TRADING_SYMBOLS)
@@ -123,12 +129,12 @@ def start_bot():
 
         time.sleep(5)
 
-# Start de bot en de dashboard-updates
+# Start de bot in de achtergrond
 def start():
-    threading.Thread(target=start_bot, daemon=True).start()
+    socketio.start_background_task(start_bot)
 
 if __name__ == "__main__":
-    logging.info("🚀 Lucky13 Bot gestart!")
+    logging.info("🚀 Lucky13 Bot wordt gestart...")
     port = int(os.environ.get("PORT", 5000))
     start()
     socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)

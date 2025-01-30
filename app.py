@@ -21,16 +21,16 @@ logging.basicConfig(
     ]
 )
 
-# Initialiseer Flask en SocketIO
+# Flask en SocketIO setup
 app = Flask(__name__)
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Variabele om het bot-proces bij te houden
+# Variabelen
 BOT_PROCESS = None  
-BOT_SCRIPT = "lucky13.py"  # De naam van het bot-script
-
+BOT_SCRIPT = "lucky13.py"
 CONFIG_FILE = "config.json"
+BALANCE_FILE = "balance.json"
 
 # 📌 Configuratie-instellingen laden
 def load_settings():
@@ -48,7 +48,7 @@ def save_settings(settings):
     with open(CONFIG_FILE, "w") as file:
         json.dump(settings, file, indent=4)
 
-# 📌 Simulatie: Actieve trades ophalen
+# 📌 Actieve trades ophalen (simulatie)
 def get_active_trades():
     trades = []
     for symbol in ['BTCUSDT', 'ETHUSDT', 'XRPUSDT']:
@@ -60,16 +60,25 @@ def get_active_trades():
         trades.append(trade)
     return trades
 
-# 📌 Simulatie: Accountbalans ophalen
+# 📌 Accountbalans ophalen vanuit balance.json
 def fetch_account_balance():
-    return {'total': {'USDT': 1000}}
+    if os.path.exists(BALANCE_FILE):
+        with open(BALANCE_FILE, "r") as file:
+            try:
+                balance_data = json.load(file)
+                return {'total': balance_data}
+            except json.JSONDecodeError:
+                logging.error("Balansbestand is corrupt, resetten naar 0 USDT.")
+                return {'total': {'USDT': 0}}
+    return {'total': {'USDT': 0}}
 
 # 📌 Verzend accountinformatie naar het dashboard
 def send_dashboard_data():
     balance = fetch_account_balance()
     active_trades = get_active_trades()
-    socketio.emit('update_balance', {'balance': balance['total']['USDT']})
+    socketio.emit('update_balance', {'balance': balance['total'].get('USDT', 0)})
     socketio.emit('update_trades', {'trades': active_trades})
+    logging.info("Dashboard geüpdatet: Balans %s USDT", balance['total'].get('USDT', 0))
 
 # 📌 Periodieke functie voor het updaten van het dashboard
 def update_dashboard_periodically():
@@ -83,10 +92,14 @@ def start_bot():
     global BOT_PROCESS
     if BOT_PROCESS is not None:
         return jsonify({"status": "Bot is already running!"})
-    
-    BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    logging.info("Bot gestart.")
-    return jsonify({"status": "Bot started successfully!"})
+
+    try:
+        BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        logging.info("Bot gestart.")
+        return jsonify({"status": "Bot started successfully!"})
+    except Exception as e:
+        logging.error("Fout bij starten van de bot: %s", str(e))
+        return jsonify({"status": "Failed to start bot", "error": str(e)})
 
 # 📌 Stop de bot door het proces te beëindigen
 @app.route("/stop-bot", methods=["POST"])
@@ -95,17 +108,22 @@ def stop_bot():
     if BOT_PROCESS is None:
         return jsonify({"status": "Bot is not running!"})
 
-    os.kill(BOT_PROCESS.pid, signal.SIGTERM)
-    BOT_PROCESS = None
-    logging.info("Bot gestopt.")
-    return jsonify({"status": "Bot stopped successfully!"})
+    try:
+        os.kill(BOT_PROCESS.pid, signal.SIGTERM)
+        BOT_PROCESS.wait()
+        BOT_PROCESS = None
+        logging.info("Bot gestopt.")
+        return jsonify({"status": "Bot stopped successfully!"})
+    except Exception as e:
+        logging.error("Fout bij stoppen van de bot: %s", str(e))
+        return jsonify({"status": "Failed to stop bot", "error": str(e)})
 
 # 📌 Controleer of de bot draait
 @app.route("/bot-status", methods=["GET"])
 def bot_status():
     return jsonify({"running": BOT_PROCESS is not None})
 
-# 📌 API om logs op te halen
+# 📌 API om logs op te halen (laatste 50 regels)
 @app.route("/logs", methods=["GET"])
 def get_logs():
     try:

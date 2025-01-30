@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 
 # Flask setup
-app = Flask(_name_)
+app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Trading instellingen
@@ -154,7 +154,7 @@ def start():
     threading.Thread(target=start_bot, daemon=True).start()
     threading.Thread(target=dashboard_updater, daemon=True).start()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     print("Lucky13 Bot gestart!")
     start()
 
@@ -163,6 +163,6 @@ if _name_ == "_main_":
 
     # 📌 Gebruik eventlet WSGI server om de Flask-app in productie te draaien
     eventlet.wsgi.server(eventlet.listen(("0.0.0.0", port)), app)
-
+    
     print("Bot is gestopt.")
     sys.exit(0)

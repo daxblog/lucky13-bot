@@ -91,22 +91,22 @@
 <script>
     const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/");
 
-    // Functie om botstatus te updaten
-    function updateBotStatus() {
-        fetch("/bot-status")
-            .then(response => response.json())
-            .then(data => {
-                const statusElement = document.getElementById("bot-status");
-                if (data.running) {
-                    statusElement.textContent = "Bot is running";
-                    statusElement.className = "status success";
-                } else {
-                    statusElement.textContent = "Bot is stopped";
-                    statusElement.className = "status failure";
-                }
-            })
-            .catch(error => console.error("Error checking bot status:", error));
+    // Functie om botstatus te updaten via socket.io
+    function updateBotStatus(isRunning) {
+        const statusElement = document.getElementById("bot-status");
+        if (isRunning) {
+            statusElement.textContent = "Bot is active";
+            statusElement.className = "status success";
+        } else {
+            statusElement.textContent = "Bot is stopped";
+            statusElement.className = "status failure";
+        }
     }
+
+    // WebSocket om de botstatus te ontvangen
+    socket.on('update_bot_status', (data) => {
+        updateBotStatus(data.running);  // Gebruik de ontvangen status om de UI bij te werken
+    });
 
     // WebSocket om de accountbalans te ontvangen
     socket.on('update_balance', data => {
@@ -166,7 +166,6 @@
 
     // Initialiseer de grafiek bij het laden van de pagina
     updateGraph();
-    updateBotStatus();
 
 </script>
 

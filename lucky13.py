@@ -156,6 +156,10 @@ def start():
 
 if __name__ == "__main__":
     print("Lucky13 Bot gestart!")
+
+    # Definieer de poort
+    port = int(os.environ.get("PORT", 5000))  # Gebruik een omgevingsvariabele voor de poort of standaard 5000
+
     start()
 
     # 📌 Start de Flask server correct met eventlet

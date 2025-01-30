@@ -6,16 +6,20 @@ from flask import Flask
 import threading
 import json
 import ccxt
+import logging
+
+# Logging setup
+logging.basicConfig(level=logging.DEBUG)
 
 # Flask setup
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Trading instellingen
-TRADING_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']  # Voeg hier de symbolen toe die je wilt traden
-TRADE_PERCENTAGE = 0.02  # 2% van het saldo wordt geïnvesteerd
-STOP_LOSS_PERCENTAGE = 0.03  # Stop loss op 3% verlies
-TAKE_PROFIT_PERCENTAGE = 0.05  # Take profit op 5% winst
+TRADING_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']
+TRADE_PERCENTAGE = 0.02
+STOP_LOSS_PERCENTAGE = 0.03
+TAKE_PROFIT_PERCENTAGE = 0.05
 
 # 📌 Configuratie-instellingen voor notificaties
 def load_notification_settings():
@@ -35,8 +39,8 @@ def send_notification(message_type, message):
 # 📌 Verbinding maken met Bybit API via ccxt
 def connect_to_bybit():
     """Verbind met Bybit via ccxt"""
-    api_key = 'BlgHo4zOTHeThKDWsj'  # Vul je eigen API-key in
-    api_secret = 'cWwuFxIBZLzyBWJ4NrWpkIY5RS18O3Mns3DR'  # Vul je eigen API-secret in
+    api_key = 'BlgHo4zOTHeThKDWsj'  
+    api_secret = 'cWwuFxIBZLzyBWJ4NrWpkIY5RS18O3Mns3DR'  
     
     exchange = ccxt.bybit({
         'apiKey': api_key,
@@ -49,26 +53,35 @@ def connect_to_bybit():
 def get_current_price(symbol):
     """Haal de huidige prijs op voor een bepaald symbool"""
     exchange = connect_to_bybit()
-    ticker = exchange.fetch_ticker(symbol)
-    return ticker['last']  # Laatste prijs
+    try:
+        ticker = exchange.fetch_ticker(symbol)
+        return ticker['last']  # Laatste prijs
+    except ccxt.NetworkError as e:
+        logging.error(f"Netwerkfout bij ophalen van prijs voor {symbol}: {e}. Probeer opnieuw...")
+        return get_current_price(symbol)  
+    except ccxt.BaseError as e:
+        logging.error(f"Fout bij ophalen van prijs voor {symbol}: {e}. Probeer opnieuw...")
+        return get_current_price(symbol) 
 
 # 📌 Functie om accountbalans op te halen van Bybit via ccxt
 def fetch_account_balance():
     """Haal de accountbalans op van Bybit via ccxt"""
     exchange = connect_to_bybit()
     try:
-        balance = exchange.fetch_balance()  # Haal de balans op via ccxt
-
+        balance = exchange.fetch_balance()
         if 'total' in balance and 'USDT' in balance['total']:
-            usdt_balance = balance['total']['USDT']  # Haal het USDT saldo op
-            print(f"Beschikbaar USDT saldo: {usdt_balance}")
-            return {'total': {'USDT': usdt_balance}}  # Retourneer het saldo in het gewenste formaat
+            usdt_balance = balance['total']['USDT']
+            logging.info(f"Beschikbaar USDT saldo: {usdt_balance}")
+            return {'total': {'USDT': usdt_balance}}
         else:
-            print("Saldo USDT niet gevonden.")
-            return {'total': {'USDT': 0}}  # Foutafhandelingsmechanisme
-    except Exception as e:
-        print(f"Fout bij het ophalen van saldo: {e}")
-        return {'total': {'USDT': 0}}  # Return een foutmechanisme
+            logging.error("Saldo USDT niet gevonden.")
+            return {'total': {'USDT': 0}}
+    except ccxt.NetworkError as e:
+        logging.error(f"Netwerkfout bij het ophalen van saldo: {e}. Probeer opnieuw...")
+        return fetch_account_balance() 
+    except ccxt.BaseError as e:
+        logging.error(f"Fout bij het ophalen van saldo: {e}. Probeer opnieuw...")
+        return fetch_account_balance() 
 
 # 📌 Functie om actieve trades op te halen van Bybit via ccxt
 def get_active_trades():

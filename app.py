@@ -104,6 +104,18 @@ def update_dashboard_periodically():
     thread = threading.Thread(target=run, daemon=True)
     thread.start()
 
+# 📌 Periodieke functie voor het updaten van de bot status naar het dashboard
+def update_bot_status_periodically():
+    def run():
+        while True:
+            # Check of de bot draait en zend de status naar het dashboard
+            bot_running = BOT_PROCESS is not None
+            socketio.emit('update_bot_status', {'running': bot_running})
+            time.sleep(10)  # Elke 10 seconden bijwerken
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+
 # 📌 Start de bot (`lucky13.py`) als een apart proces
 @app.route("/start-bot", methods=["POST"])
 def start_bot():
@@ -178,6 +190,7 @@ def get_winnings():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    update_dashboard_periodically()
+    update_dashboard_periodically()  # Start de periodieke dashboard update
+    update_bot_status_periodically()  # Start de periodieke bot status update
     logging.info("Server gestart op poort %d", port)
     socketio.run(app, host="0.0.0.0", port=port, debug=False)  # Zorg ervoor dat debug=False is in productie

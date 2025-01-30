@@ -3,7 +3,7 @@ import os
 import json
 import random
 import logging
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, jsonify, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
@@ -22,6 +22,12 @@ BOT_SCRIPT = "lucky13.py"
 CONFIG_FILE = "config.json"
 BALANCE_FILE = "balance.json"
 WINNINGS_FILE = "winnings.json"
+
+# Homepage route
+def home():
+    return "Lucky13 Bot Dashboard is running!"
+
+app.route("/")(home)
 
 # Config laden
 def load_settings():
@@ -83,7 +89,12 @@ def start_bot():
         return jsonify({"status": "Bot is already running!"})
 
     try:
-        BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        BOT_PROCESS = subprocess.Popen(
+            ["python", BOT_SCRIPT],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True
+        )
         socketio.emit('bot_status', {'running': True})  # ✅ Directe update
         return jsonify({"status": "Bot started successfully!"})
     except Exception as e:
@@ -117,4 +128,5 @@ def update_settings():
 if __name__ == "__main__":
     update_dashboard_periodically()
     update_bot_status_periodically()
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False)
+    from gunicorn.app.wsgiapp import run
+    run()

@@ -5,9 +5,21 @@ import time
 import json
 import random
 import threading
+import logging
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 from flask_cors import CORS
+
+# Logging setup
+LOG_FILE = "app.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
 
 # Initialiseer Flask en SocketIO
 app = Flask(__name__)
@@ -56,7 +68,6 @@ def fetch_account_balance():
 def send_dashboard_data():
     balance = fetch_account_balance()
     active_trades = get_active_trades()
-
     socketio.emit('update_balance', {'balance': balance['total']['USDT']})
     socketio.emit('update_trades', {'trades': active_trades})
 
@@ -73,9 +84,8 @@ def start_bot():
     if BOT_PROCESS is not None:
         return jsonify({"status": "Bot is already running!"})
     
-    # Start lucky13.py als een apart proces
-    BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT])
-
+    BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    logging.info("Bot gestart.")
     return jsonify({"status": "Bot started successfully!"})
 
 # 📌 Stop de bot door het proces te beëindigen
@@ -85,16 +95,25 @@ def stop_bot():
     if BOT_PROCESS is None:
         return jsonify({"status": "Bot is not running!"})
 
-    # Stop het proces veilig
     os.kill(BOT_PROCESS.pid, signal.SIGTERM)
     BOT_PROCESS = None
-
+    logging.info("Bot gestopt.")
     return jsonify({"status": "Bot stopped successfully!"})
 
 # 📌 Controleer of de bot draait
 @app.route("/bot-status", methods=["GET"])
 def bot_status():
     return jsonify({"running": BOT_PROCESS is not None})
+
+# 📌 API om logs op te halen
+@app.route("/logs", methods=["GET"])
+def get_logs():
+    try:
+        with open(LOG_FILE, "r") as file:
+            logs = file.readlines()
+        return jsonify({"logs": logs[-50:]})  # Laatste 50 regels tonen
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 # 📌 Dashboardpagina serveren
 @app.route("/")
@@ -112,12 +131,11 @@ def get_settings():
 def update_settings():
     new_settings = request.json
     save_settings(new_settings)
+    logging.info("Instellingen bijgewerkt: %s", new_settings)
     return jsonify({"message": "Instellingen bijgewerkt!"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    
-    # Start een aparte thread om het dashboard periodiek te updaten
     threading.Thread(target=update_dashboard_periodically, daemon=True).start()
-    
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+    logging.info("Server gestart op poort %d", port)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)

@@ -32,7 +32,6 @@ BOT_PROCESS = None
 BOT_SCRIPT = "lucky13.py"
 CONFIG_FILE = "config.json"
 BALANCE_FILE = "balance.json"
-WINNINGS_FILE = "winnings.json"  # Bestand voor de winsten
 
 # 📌 Configuratie-instellingen laden
 def load_settings():
@@ -73,17 +72,6 @@ def fetch_account_balance():
         except json.JSONDecodeError:
             logging.error("Balansbestand is corrupt. Reset naar 0 USDT.")
     return {'total': 0}
-
-# 📌 Winsten ophalen vanuit winnings.json
-def fetch_winnings():
-    if os.path.exists(WINNINGS_FILE):
-        try:
-            with open(WINNINGS_FILE, "r") as file:
-                winnings_data = json.load(file)
-                return winnings_data.get("total_win", 0)
-        except json.JSONDecodeError:
-            logging.error("Winningsbestand is corrupt. Reset naar 0 winst.")
-    return 0
 
 # 📌 Verzend accountinformatie naar het dashboard via SocketIO
 def send_dashboard_data():
@@ -150,12 +138,6 @@ def get_logs():
         return jsonify({"logs": logs[-50:]})  # Laatste 50 regels tonen
     except Exception as e:
         return jsonify({"error": str(e)})
-
-# 📌 API om winsten op te halen
-@app.route("/api/winnings", methods=["GET"])
-def get_winnings():
-    winnings = fetch_winnings()
-    return jsonify({"winnings": winnings})
 
 # 📌 Dashboardpagina serveren
 @app.route("/")

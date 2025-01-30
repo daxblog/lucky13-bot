@@ -1,11 +1,15 @@
 // Zorg ervoor dat de socket verbinding wordt opgebouwd zodra de pagina wordt geladen
-const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/"); // Live verbinding; // Zorg ervoor dat dit overeenkomt met je Heroku server als je dat gebruikt
+const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/"); 
 
-// Variabelen voor de interface
-let saldoElement = document.getElementById("balance");  // Vergeet niet de juiste ID te gebruiken
+// UI elementen
+let saldoElement = document.getElementById("balance");
 let activeTradesContainer = document.getElementById("trades-list");
 let chartContainer = document.getElementById("chart");
 let errorMessageContainer = document.getElementById("errorMessages");
+let botStatusIndicator = document.getElementById("bot-status");
+
+// Chart.js instance
+let balanceChart = null;
 
 // Update de balans op de pagina
 function updateBalance(data) {
@@ -14,7 +18,7 @@ function updateBalance(data) {
 
 // Update de lijst van actieve trades
 function updateActiveTrades(data) {
-    activeTradesContainer.innerHTML = ""; // Clear the existing trades
+    activeTradesContainer.innerHTML = ""; // Clear bestaande trades
 
     data.trades.forEach(trade => {
         const tradeElement = document.createElement("div");
@@ -28,9 +32,9 @@ function updateActiveTrades(data) {
     });
 }
 
-// Foutmelding tonen
+// Foutmeldingen tonen
 function showErrorMessages(messages) {
-    errorMessageContainer.innerHTML = ""; // Clear the existing messages
+    errorMessageContainer.innerHTML = ""; // Clear bestaande berichten
 
     messages.forEach(message => {
         const messageElement = document.createElement("div");
@@ -42,6 +46,10 @@ function showErrorMessages(messages) {
 
 // Grafiek bijwerken
 function updateChart(data) {
+    if (balanceChart) {
+        balanceChart.destroy(); // Verwijder de bestaande grafiek om duplicatie te voorkomen
+    }
+
     const ctx = chartContainer.getContext("2d");
     const chartData = {
         labels: data.labels,
@@ -49,12 +57,13 @@ function updateChart(data) {
             label: "Saldo per maand",
             data: data.values,
             borderColor: '#007bff',
-            fill: false,
+            backgroundColor: 'rgba(0, 123, 255, 0.2)',
+            fill: true,
             borderWidth: 2
         }]
     };
 
-    new Chart(ctx, {
+    balanceChart = new Chart(ctx, {
         type: 'line',
         data: chartData,
         options: {
@@ -64,31 +73,34 @@ function updateChart(data) {
                     beginAtZero: true
                 }
             }
-        });
+        }
+    });
+}
+
+// Bot status bijwerken
+function updateBotStatus(isRunning) {
+    if (botStatusIndicator) {
+        botStatusIndicator.innerText = isRunning ? "✅ Bot is actief" : "❌ Bot is gestopt";
+        botStatusIndicator.style.color = isRunning ? "green" : "red";
+    }
 }
 
 // Socket.io event handlers
-socket.on('update_balance', function(data) {
-    updateBalance(data);
-});
-
-socket.on('update_trades', function(data) {
-    updateActiveTrades(data);
-});
-
-socket.on('update_chart', function(data) {
-    updateChart(data);
-});
-
-socket.on('error_messages', function(messages) {
-    showErrorMessages(messages);
-});
+socket.on('update_balance', updateBalance);
+socket.on('update_trades', updateActiveTrades);
+socket.on('update_chart', updateChart);
+socket.on('error_messages', showErrorMessages);
+socket.on('bot_status', updateBotStatus); // Ontvang bot status updates
 
 // Exporteer de grafiek naar een CSV bestand
 function exportChartToCSV() {
-    const chartData = chartContainer.getContext("2d").chart.data;
-    const labels = chartData.labels;
-    const values = chartData.datasets[0].data;
+    if (!balanceChart) {
+        alert("Geen gegevens beschikbaar om te exporteren.");
+        return;
+    }
+
+    const labels = balanceChart.data.labels;
+    const values = balanceChart.data.datasets[0].data;
 
     let csvContent = "Label,Value\n";
     labels.forEach((label, index) => {
@@ -110,17 +122,29 @@ if (exportButton) {
 
 // Functies om de bot te starten en stoppen
 function startBot() {
-    fetch('/start-bot', {
-        method: 'POST'
-    }).then(response => response.json())
-      .then(data => alert(data.status));
+    fetch('/start-bot', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.status);
+            updateBotStatus(true); // Update status
+        })
+        .catch(error => {
+            console.error("Fout bij starten van de bot:", error);
+            alert("Kon de bot niet starten.");
+        });
 }
 
 function stopBot() {
-    fetch('/stop-bot', {
-        method: 'POST'
-    }).then(response => response.json())
-      .then(data => alert(data.status));
+    fetch('/stop-bot', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.status);
+            updateBotStatus(false); // Update status
+        })
+        .catch(error => {
+            console.error("Fout bij stoppen van de bot:", error);
+            alert("Kon de bot niet stoppen.");
+        });
 }
 
 // Event listeners voor de start/stop knoppen
@@ -170,7 +194,8 @@ document.addEventListener("DOMContentLoaded", function () {
             alert(data.message);
         })
         .catch(error => {
-            console.error("Error updating settings:", error);
+            console.error("Fout bij opslaan van instellingen:", error);
+            alert("Kon de instellingen niet opslaan.");
         });
     });
 
@@ -184,7 +209,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("take-profit-percentage").value = settings.take_profit_percentage || 0.05;
             })
             .catch(error => {
-                console.error("Error loading settings:", error);
+                console.error("Fout bij laden van instellingen:", error);
             });
     }
 });

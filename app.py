@@ -109,8 +109,9 @@ def update_bot_status_periodically():
     def run():
         while True:
             # Check of de bot draait en zend de status naar het dashboard
-            bot_running = BOT_PROCESS is not None
+            bot_running = BOT_PROCESS is not None and BOT_PROCESS.poll() is None
             socketio.emit('update_bot_status', {'running': bot_running})
+            logging.info("Bot status bijgewerkt: %s", "Running" if bot_running else "Stopped")
             time.sleep(10)  # Elke 10 seconden bijwerken
 
     thread = threading.Thread(target=run, daemon=True)
@@ -151,7 +152,7 @@ def stop_bot():
 # 📌 Controleer of de bot draait
 @app.route("/bot-status", methods=["GET"])
 def bot_status():
-    return jsonify({"running": BOT_PROCESS is not None})
+    return jsonify({"running": BOT_PROCESS is not None and BOT_PROCESS.poll() is None})
 
 # 📌 API om logs op te halen (laatste 50 regels)
 @app.route("/logs", methods=["GET"])

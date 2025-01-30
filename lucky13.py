@@ -72,7 +72,9 @@ def fetch_account_balance():
     exchange = connect_to_bybit()
     try:
         balance = exchange.fetch_balance()
+        logging.info(f"Balans opgehaald: {balance}")  # Log volledige balansinformatie
         usdt_balance = balance['total'].get('USDT', 0)
+        logging.info(f"USDT balans: {usdt_balance}")  # Log alleen de USDT balans
         with open(BALANCE_FILE, "w", encoding="utf-8") as file:
             json.dump({"USDT": usdt_balance}, file)
         socketio.emit('update_balance', {'balance': usdt_balance})
@@ -82,8 +84,11 @@ def fetch_account_balance():
         if os.path.exists(BALANCE_FILE):
             with open(BALANCE_FILE, "r", encoding="utf-8") as file:
                 try:
-                    return {'total': json.load(file).get("USDT", 0)}
+                    balance_data = json.load(file)
+                    logging.warning(f"Gebruik van lokaal opgeslagen saldo: {balance_data.get('USDT', 0)}")
+                    return {'total': balance_data.get("USDT", 0)}
                 except json.JSONDecodeError:
+                    logging.error("Error bij het lezen van lokaal saldo bestand. Zet saldo op 0.")
                     return {'total': 0}
         return {'total': 0}
 

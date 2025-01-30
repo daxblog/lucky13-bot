@@ -24,7 +24,7 @@ logging.basicConfig(
 # Flask en SocketIO setup
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # Variabelen
 BOT_PROCESS = None  
@@ -35,8 +35,11 @@ BALANCE_FILE = "balance.json"
 # 📌 Configuratie-instellingen laden
 def load_settings():
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as file:
-            return json.load(file)
+        try:
+            with open(CONFIG_FILE, "r") as file:
+                return json.load(file)
+        except json.JSONDecodeError:
+            logging.error("Fout bij het laden van config.json. Bestandsinhoud is ongeldig.")
     return {
         'trade_percentage': 0.02,
         'stop_loss_percentage': 0.03,
@@ -50,41 +53,43 @@ def save_settings(settings):
 
 # 📌 Actieve trades ophalen (simulatie)
 def get_active_trades():
-    trades = []
-    for symbol in ['BTCUSDT', 'ETHUSDT', 'XRPUSDT']:
-        trade = {
+    return [
+        {
             'symbol': symbol,
             'status': 'active',
             'current_profit': round(random.uniform(-0.03, 0.05), 2)
-        }
-        trades.append(trade)
-    return trades
+        } for symbol in ['BTCUSDT', 'ETHUSDT', 'XRPUSDT']
+    ]
 
 # 📌 Accountbalans ophalen vanuit balance.json
 def fetch_account_balance():
     if os.path.exists(BALANCE_FILE):
-        with open(BALANCE_FILE, "r") as file:
-            try:
+        try:
+            with open(BALANCE_FILE, "r") as file:
                 balance_data = json.load(file)
-                return {'total': balance_data}
-            except json.JSONDecodeError:
-                logging.error("Balansbestand is corrupt, resetten naar 0 USDT.")
-                return {'total': {'USDT': 0}}
-    return {'total': {'USDT': 0}}
+                return {'total': balance_data.get('USDT', 0)}
+        except json.JSONDecodeError:
+            logging.error("Balansbestand is corrupt. Reset naar 0 USDT.")
+    return {'total': 0}
 
-# 📌 Verzend accountinformatie naar het dashboard
+# 📌 Verzend accountinformatie naar het dashboard via SocketIO
 def send_dashboard_data():
     balance = fetch_account_balance()
     active_trades = get_active_trades()
-    socketio.emit('update_balance', {'balance': balance['total'].get('USDT', 0)})
+
+    logging.info("Dashboard geüpdatet: Balans %s USDT", balance['total'])
+    socketio.emit('update_balance', {'balance': balance['total']})
     socketio.emit('update_trades', {'trades': active_trades})
-    logging.info("Dashboard geüpdatet: Balans %s USDT", balance['total'].get('USDT', 0))
 
 # 📌 Periodieke functie voor het updaten van het dashboard
 def update_dashboard_periodically():
-    while True:
-        send_dashboard_data()
-        time.sleep(10)  # Elke 10 seconden bijwerken
+    def run():
+        while True:
+            send_dashboard_data()
+            time.sleep(10)  # Elke 10 seconden bijwerken
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
 
 # 📌 Start de bot (`lucky13.py`) als een apart proces
 @app.route("/start-bot", methods=["POST"])
@@ -94,7 +99,7 @@ def start_bot():
         return jsonify({"status": "Bot is already running!"})
 
     try:
-        BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        BOT_PROCESS = subprocess.Popen(["python", BOT_SCRIPT], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         logging.info("Bot gestart.")
         return jsonify({"status": "Bot started successfully!"})
     except Exception as e:
@@ -154,6 +159,6 @@ def update_settings():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    threading.Thread(target=update_dashboard_periodically, daemon=True).start()
+    update_dashboard_periodically()
     logging.info("Server gestart op poort %d", port)
     socketio.run(app, host="0.0.0.0", port=port, debug=False)

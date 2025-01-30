@@ -1,10 +1,10 @@
 // Zorg ervoor dat de socket verbinding wordt opgebouwd zodra de pagina wordt geladen
-const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/"); 
+const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/");
 
 // UI elementen
 let saldoElement = document.getElementById("balance");
 let activeTradesContainer = document.getElementById("trades-list");
-let chartContainer = document.getElementById("chart");
+let chartContainer = document.getElementById("winningsChart");  // Grafiek container aangepast
 let errorMessageContainer = document.getElementById("errorMessages");
 let botStatusIndicator = document.getElementById("bot-status");
 
@@ -44,37 +44,35 @@ function showErrorMessages(messages) {
     });
 }
 
-// Grafiek bijwerken
-function updateChart(data) {
+// Grafiek bijwerken voor winsten en stortingen
+function updateGraph(winnings, deposits) {
     if (balanceChart) {
         balanceChart.destroy(); // Verwijder de bestaande grafiek om duplicatie te voorkomen
     }
 
     const ctx = chartContainer.getContext("2d");
     const chartData = {
-        labels: data.labels,
+        labels: ['Winsten', 'Stortingen'],  // Labels voor de grafiek
         datasets: [{
-            label: "Saldo per maand",
-            data: data.values,
-            borderColor: '#007bff',
-            backgroundColor: 'rgba(0, 123, 255, 0.2)',
-            fill: true,
-            borderWidth: 2
+            label: 'USDT',
+            data: [winnings, deposits],  // Gegevens voor winsten en stortingen
+            backgroundColor: ['#28a745', '#dc3545'],
+            borderColor: ['#28a745', '#dc3545'],
+            borderWidth: 1
         }]
     };
 
     balanceChart = new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: chartData,
         options: {
             responsive: true,
             scales: {
-                x: {
+                y: {
                     beginAtZero: true
                 }
             }
-        }
-    });
+        });
 }
 
 // Bot status bijwerken
@@ -88,7 +86,7 @@ function updateBotStatus(isRunning) {
 // Socket.io event handlers
 socket.on('update_balance', updateBalance);
 socket.on('update_trades', updateActiveTrades);
-socket.on('update_chart', updateChart);
+socket.on('update_graph', (data) => updateGraph(data.winnings, data.deposits));  // Update de grafiek met winsten en stortingen
 socket.on('error_messages', showErrorMessages);
 socket.on('bot_status', updateBotStatus); // Ontvang bot status updates
 
@@ -114,49 +112,14 @@ function exportChartToCSV() {
     link.click();
 }
 
-// Button voor het exporteren van de grafiek
+// Button voor het exporteren van de grafiek (Als je deze functionaliteit wilt behouden)
 const exportButton = document.getElementById("exportChart");
 if (exportButton) {
     exportButton.addEventListener("click", exportChartToCSV);
 }
 
-// Functies om de bot te starten en stoppen
-function startBot() {
-    fetch('/start-bot', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            alert(data.status);
-            updateBotStatus(true); // Update status
-        })
-        .catch(error => {
-            console.error("Fout bij starten van de bot:", error);
-            alert("Kon de bot niet starten.");
-        });
-}
-
-function stopBot() {
-    fetch('/stop-bot', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            alert(data.status);
-            updateBotStatus(false); // Update status
-        })
-        .catch(error => {
-            console.error("Fout bij stoppen van de bot:", error);
-            alert("Kon de bot niet stoppen.");
-        });
-}
-
-// Event listeners voor de start/stop knoppen
-const startButton = document.getElementById("startBot");
-if (startButton) {
-    startButton.addEventListener("click", startBot);
-}
-
-const stopButton = document.getElementById("stopBot");
-if (stopButton) {
-    stopButton.addEventListener("click", stopBot);
-}
+// Verwijder de functies voor het starten en stoppen van de bot
+// Deze knoppen zijn niet meer nodig in de nieuwe versie van de interface
 
 // Instellingen tabbladen wisselen
 document.addEventListener("DOMContentLoaded", function () {

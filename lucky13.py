@@ -158,11 +158,8 @@ if __name__ == "__main__":
     print("Lucky13 Bot gestart!")
     start()
 
-    # 📌 Heroku gebruikt een dynamische poort
-    port = int(os.environ.get("PORT", 5000))
-
-    # 📌 Gebruik eventlet WSGI server om de Flask-app in productie te draaien
-    eventlet.wsgi.server(eventlet.listen(("0.0.0.0", port)), app)
+    # 📌 Start de Flask server correct met eventlet
+    socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
     
     print("Bot is gestopt.")
     sys.exit(0)

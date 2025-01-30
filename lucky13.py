@@ -50,7 +50,7 @@ def connect_to_bybit():
     return exchange
 
 # 📌 Functie om de actuele prijs op te halen
-def get_current_price(symbol):
+def get_current_price(symbol, retries=3):
     """Haal de huidige prijs op voor een bepaald symbool"""
     exchange = connect_to_bybit()
     try:
@@ -58,10 +58,20 @@ def get_current_price(symbol):
         return ticker['last']  # Laatste prijs
     except ccxt.NetworkError as e:
         logging.error(f"Netwerkfout bij ophalen van prijs voor {symbol}: {e}. Probeer opnieuw...")
-        return get_current_price(symbol)  # Probeer opnieuw
+        if retries > 0:
+            time.sleep(2)  # Wacht 2 seconden voor de retry
+            return get_current_price(symbol, retries - 1)  # Probeer opnieuw
+        else:
+            logging.error("Te veel netwerkfouten, geef het op.")
+            return None
     except ccxt.BaseError as e:
         logging.error(f"Fout bij ophalen van prijs voor {symbol}: {e}. Probeer opnieuw...")
-        return get_current_price(symbol)  # Probeer opnieuw
+        if retries > 0:
+            time.sleep(2)  # Wacht 2 seconden voor de retry
+            return get_current_price(symbol, retries - 1)  # Probeer opnieuw
+        else:
+            logging.error("Te veel foutmeldingen, geef het op.")
+            return None
 
 # 📌 Functie om accountbalans op te halen van Bybit via ccxt
 def fetch_account_balance():
@@ -76,10 +86,7 @@ def fetch_account_balance():
         else:
             logging.error("Saldo USDT niet gevonden.")
             return {'total': {'USDT': 0}}
-    except ccxt.NetworkError as e:
-        logging.error(f"Netwerkfout bij het ophalen van saldo: {e}. Probeer opnieuw...")
-        return fetch_account_balance()  # Probeer opnieuw
-    except ccxt.BaseError as e:
+    except (ccxt.NetworkError, ccxt.BaseError) as e:
         logging.error(f"Fout bij het ophalen van saldo: {e}. Probeer opnieuw...")
         return fetch_account_balance()  # Probeer opnieuw
 
@@ -98,10 +105,7 @@ def get_active_trades():
                 'current_profit': random.uniform(-STOP_LOSS_PERCENTAGE, TAKE_PROFIT_PERCENTAGE)
             })
         return trades
-    except ccxt.NetworkError as e:
-        logging.error(f"Netwerkfout bij het ophalen van actieve trades: {e}. Probeer opnieuw...")
-        return get_active_trades()  # Probeer opnieuw
-    except ccxt.ExchangeError as e:
+    except (ccxt.NetworkError, ccxt.ExchangeError) as e:
         logging.error(f"Fout bij het ophalen van actieve trades: {e}. Probeer opnieuw...")
         return get_active_trades()  # Probeer opnieuw
     except Exception as e:
@@ -119,10 +123,7 @@ def place_order(symbol, side, amount):
         elif side == 'sell':
             order = exchange.create_market_sell_order(symbol, amount)
         return order
-    except ccxt.NetworkError as e:
-        logging.error(f"Netwerkfout bij het plaatsen van order voor {symbol}: {e}. Probeer opnieuw...")
-        return place_order(symbol, side, amount)  # Probeer opnieuw
-    except ccxt.BaseError as e:
+    except (ccxt.NetworkError, ccxt.BaseError) as e:
         logging.error(f"Fout bij het plaatsen van order voor {symbol}: {e}. Probeer opnieuw...")
         return place_order(symbol, side, amount)  # Probeer opnieuw
 
@@ -136,6 +137,9 @@ def trade_simulation():
         # Kies een willekeurig trading symbool
         symbol = random.choice(TRADING_SYMBOLS)
         current_price = get_current_price(symbol)
+
+        if current_price is None:
+            continue  # Ga verder als prijs niet kan worden opgehaald
 
         # Bereken de hoeveelheid die je wilt kopen (bijvoorbeeld 2% van de balans)
         balance = fetch_account_balance()

@@ -125,22 +125,10 @@
         });
     });
 
-    // Functie om winsten en stortingen op te halen en grafiek te updaten
-    function updateGraph() {
-        Promise.all([ 
-            fetch("/api/winnings").then(res => res.json()),  // Ophalen van winsten
-            fetch("/api/settings").then(res => res.json())  // Ophalen van de instellingen voor stortingen (als voorbeeld)
-        ])
-        .then(([winningsData, settings]) => {
-            const winnings = winningsData.winnings || 0;
-            const deposits = settings.stop_loss_percentage * 100 || 0;  // Gebruik instellingen als een voorbeeld voor stortingen
-            updateChart(winnings, deposits);
-        })
-        .catch(error => {
-            console.error("Error fetching graph data:", error);
-            document.getElementById("winningsChart").parentElement.innerHTML = "Error fetching data for graph.";
-        });
-    }
+    // WebSocket om de gegevens voor winsten en stortingen voor de grafiek te ontvangen
+    socket.on('update_graph', (data) => {
+        updateChart(data.winnings, data.deposits);
+    });
 
     // Functie om de grafiek bij te werken
     function updateChart(winnings, deposits) {
@@ -168,11 +156,10 @@
     }
 
     // Initialiseer de grafiek bij het laden van de pagina
-    updateGraph();
+    socket.emit('request_graph_data'); // Vraag om de grafiekdata bij de server opstart
 
-    // Periodieke grafiek update elke 30 seconden
-    setInterval(updateGraph, 30000);
-
+    // Periodieke grafiek update elke 30 seconden (wordt nu beheerd via socket)
+    // setInterval(updateGraph, 30000);  // Dit is niet nodig omdat de grafiek nu via socket.io wordt bijgewerkt
 </script>
 
 </body>

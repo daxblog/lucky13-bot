@@ -11,7 +11,13 @@ import ccxt
 import logging
 
 # Logging setup
-logging.basicConfig(level=logging.DEBUG)
+DEBUG_MODE = False  # Zet op True voor gedetailleerde logs
+LOG_FILE = "bot.log"
+logging.basicConfig(
+    filename=LOG_FILE if not DEBUG_MODE else None,
+    level=logging.DEBUG if DEBUG_MODE else logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 # Flask setup
 app = Flask(__name__)
@@ -66,19 +72,13 @@ def get_current_price(symbol, retries=3):
         ticker = exchange.fetch_ticker(symbol)
         return ticker['last']
     except ccxt.NetworkError as e:
-        logging.error(f"Netwerkfout bij ophalen van prijs voor {symbol}: {e}")
+        logging.warning(f"Netwerkfout bij ophalen van prijs voor {symbol}: {e}")
         if retries > 0:
             time.sleep(2)
             return get_current_price(symbol, retries - 1)
-        else:
-            return None
     except ccxt.BaseError as e:
-        logging.error(f"Fout bij ophalen van prijs voor {symbol}: {e}")
-        if retries > 0:
-            time.sleep(2)
-            return get_current_price(symbol, retries - 1)
-        else:
-            return None
+        logging.warning(f"Fout bij ophalen van prijs voor {symbol}: {e}")
+    return None
 
 # 📌 Functie om accountbalans op te halen
 def fetch_account_balance():
@@ -87,7 +87,7 @@ def fetch_account_balance():
         balance = exchange.fetch_balance()
         return {'total': {'USDT': balance['total'].get('USDT', 0)}}
     except (ccxt.NetworkError, ccxt.BaseError) as e:
-        logging.error(f"Fout bij het ophalen van saldo: {e}")
+        logging.warning(f"Fout bij het ophalen van saldo: {e}")
         return {'total': {'USDT': 0}}
 
 # 📌 Functie om actieve trades op te halen
@@ -97,7 +97,7 @@ def get_active_trades():
         active_trades = exchange.fetch_open_orders(symbol='BTC/USDT')
         return [{'symbol': order['symbol'], 'status': order['status']} for order in active_trades]
     except Exception as e:
-        logging.error(f"Fout bij het ophalen van actieve trades: {e}")
+        logging.warning(f"Fout bij het ophalen van actieve trades: {e}")
         return []
 
 # 📌 Plaats een koop- of verkooporder
@@ -106,7 +106,7 @@ def place_order(symbol, side, amount):
     try:
         return exchange.create_market_order(symbol, side, amount)
     except Exception as e:
-        logging.error(f"Fout bij order {symbol}: {e}")
+        logging.warning(f"Fout bij order {symbol}: {e}")
         return None
 
 # 📌 Simulatie van trades
@@ -154,6 +154,6 @@ if __name__ == "__main__":
     print("Lucky13 Bot gestart!")
     start()
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=True)
+    socketio.run(app, host="0.0.0.0", port=port, debug=DEBUG_MODE)
     print("Bot is gestopt.")
     sys.exit(0)

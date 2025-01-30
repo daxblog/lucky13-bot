@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
-from flask_cors import CORS  # Importeer CORS
+from flask_cors import CORS
 import os
 import time
 import random
@@ -13,6 +13,7 @@ app = Flask(__name__)  # Correcte initialisatie
 # Voeg CORS toe aan je app om cross-origin verzoeken toe te staan
 CORS(app)  # Hiermee worden alle origin-toegang toegestaan
 
+# SocketIO Initialisatie
 socketio = SocketIO(app, cors_allowed_origins="*")  # Hiermee configureer je de SocketIO connectie
 
 # Bestandsnaam voor de configuratie

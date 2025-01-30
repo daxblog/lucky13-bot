@@ -88,7 +88,12 @@ socket.on('update_balance', updateBalance);
 socket.on('update_trades', updateActiveTrades);
 socket.on('update_graph', (data) => updateGraph(data.winnings, data.deposits));  // Update de grafiek met winsten en stortingen
 socket.on('error_messages', showErrorMessages);
-socket.on('bot_status', updateBotStatus); // Ontvang bot status updates
+
+// Bot status event
+socket.on('bot_status', function(data) {
+    console.log("Bot status ontvangen:", data);  // Voeg deze regel toe voor debugging
+    updateBotStatus(data.running);
+});
 
 // Exporteer de grafiek naar een CSV bestand
 function exportChartToCSV() {

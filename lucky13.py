@@ -99,20 +99,50 @@ def send_dashboard_data():
     socketio.emit('update_trades', {'trades': active_trades})
     logging.info(f"Dashboard geüpdatet: Balans {balance['total']['USDT']} USDT")
 
-# 📌 Functie die de trading-logica uitvoert
+# 📌 Functie die de trading-logica uitvoert met trailing stop-loss
 def start_bot():
     global running
+    open_trades = {}  # Houd actieve trades bij en hun hoogste prijs
+    
     while running:
         symbol = random.choice(TRADING_SYMBOLS)
         balance = fetch_account_balance()
         usdt_balance = balance['total']['USDT']
 
-        if usdt_balance > 10:  # Voorwaarde: minimaal 10 USDT nodig
+        if usdt_balance > 10:  # Minimaal 10 USDT nodig
             current_price = get_current_price(symbol)
-            if current_price is not None:
+            
+            if symbol not in open_trades:
+                # Nieuwe trade openen
                 trade_amount = (usdt_balance * TRADE_PERCENTAGE) / current_price
-                logging.info(f"Trade geplaatst op {symbol} met {trade_amount:.6f} {symbol.split('/')[0]}")
+                entry_price = current_price
+                stop_loss_price = entry_price * (1 - STOP_LOSS_PERCENTAGE)
+                
+                open_trades[symbol] = {
+                    "entry_price": entry_price,
+                    "highest_price": entry_price,  # Start met de instapprijs
+                    "stop_loss": stop_loss_price
+                }
+                
+                logging.info(f"✅ Nieuwe trade op {symbol} geopend tegen {entry_price}, SL: {stop_loss_price}")
 
+            else:
+                # Bestaande trade updaten
+                trade = open_trades[symbol]
+                trade["highest_price"] = max(trade["highest_price"], current_price)
+
+                # Bereken de nieuwe trailing stop-loss
+                new_stop_loss = trade["highest_price"] * (1 - STOP_LOSS_PERCENTAGE)
+
+                if new_stop_loss > trade["stop_loss"]:
+                    trade["stop_loss"] = new_stop_loss
+                    logging.info(f"🔼 Trailing stop-loss verhoogd voor {symbol}: {new_stop_loss}")
+
+                # Stop-loss controleren
+                if current_price <= trade["stop_loss"]:
+                    logging.info(f"❌ Trade op {symbol} gesloten tegen {current_price} (SL geraakt)")
+                    del open_trades[symbol]  # Verwijder de trade
+                
         time.sleep(5)  # Wacht 5 seconden tussen trades
 
 # 📌 Start bot en update dashboard periodiek

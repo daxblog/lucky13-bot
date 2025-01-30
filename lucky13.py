@@ -174,6 +174,27 @@ def calculate_profit(symbol, entry_price, current_price):
     save_winnings(profit)  # Sla de winst op
     return profit
 
+# 📌 Functie om de botstatus naar de GUI te sturen
+def send_bot_status():
+    while running:
+        status = {'running': True}  # Bot is running
+        socketio.emit('update_bot_status', status)  # Verstuur naar GUI
+        time.sleep(5)  # Elke 5 seconden status bijwerken
+
+# 📌 Functie om de open trades naar de GUI te sturen
+def send_active_trades():
+    while running:
+        open_trades = get_active_trades()  # Verkrijg actieve trades van de bot
+        socketio.emit('update_trades', {'trades': open_trades})  # Verstuur naar GUI
+        time.sleep(5)  # Elke 5 seconden bijwerken
+
+# 📌 Functie om de balans naar de GUI te sturen
+def send_account_balance():
+    while running:
+        balance = fetch_account_balance()  # Verkrijg account balans
+        socketio.emit('update_balance', {'balance': balance['total']})  # Verstuur naar GUI
+        time.sleep(10)  # Elke 10 seconden bijwerken
+
 # 📌 Aparte thread voor het updaten van het dashboard
 def dashboard_updater():
     while running:
@@ -185,6 +206,9 @@ def start():
     global running
     threading.Thread(target=start_bot, daemon=True).start()
     threading.Thread(target=dashboard_updater, daemon=True).start()
+    threading.Thread(target=send_bot_status, daemon=True).start()
+    threading.Thread(target=send_active_trades, daemon=True).start()
+    threading.Thread(target=send_account_balance, daemon=True).start()
 
 if __name__ == "__main__":
     print("Lucky13 Bot gestart!")

@@ -89,7 +89,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-    const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/");
+    const socket = io.connect(window.location.origin);  // Gebruik dynamische verbinding
 
     // Functie om botstatus te updaten via socket.io
     function updateBotStatus(isRunning) {
@@ -127,16 +127,19 @@
 
     // Functie om winsten en stortingen op te halen en grafiek te updaten
     function updateGraph() {
-        Promise.all([
+        Promise.all([ 
             fetch("/api/winnings").then(res => res.json()),  // Ophalen van winsten
             fetch("/api/settings").then(res => res.json())  // Ophalen van de instellingen voor stortingen (als voorbeeld)
         ])
         .then(([winningsData, settings]) => {
-            const winnings = winningsData.winnings;
-            const deposits = settings.stop_loss_percentage * 100;  // Gebruik instellingen als een voorbeeld voor stortingen
+            const winnings = winningsData.winnings || 0;
+            const deposits = settings.stop_loss_percentage * 100 || 0;  // Gebruik instellingen als een voorbeeld voor stortingen
             updateChart(winnings, deposits);
         })
-        .catch(error => console.error("Error fetching graph data:", error));
+        .catch(error => {
+            console.error("Error fetching graph data:", error);
+            document.getElementById("winningsChart").parentElement.innerHTML = "Error fetching data for graph.";
+        });
     }
 
     // Functie om de grafiek bij te werken
@@ -166,6 +169,9 @@
 
     // Initialiseer de grafiek bij het laden van de pagina
     updateGraph();
+
+    // Periodieke grafiek update elke 30 seconden
+    setInterval(updateGraph, 30000);
 
 </script>
 

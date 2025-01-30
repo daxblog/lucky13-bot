@@ -3,7 +3,7 @@ import os
 import json
 import random
 import logging
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 from flask_socketio import SocketIO
 from flask_cors import CORS
 
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Flask en SocketIO setup
 app = Flask(__name__)
 CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")  # Gebruik eventlet voor betere performance
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # Variabelen
 BOT_PROCESS = None  
@@ -23,11 +23,10 @@ CONFIG_FILE = "config.json"
 BALANCE_FILE = "balance.json"
 WINNINGS_FILE = "winnings.json"
 
-# Homepage route
+# ✅ Verwijder "Lucky13 Bot Dashboard is running!" en geef een nette JSON-response
+@app.route("/")
 def home():
-    return "Lucky13 Bot Dashboard is running!"
-
-app.route("/")(home)
+    return jsonify({"status": "API is online", "message": "Gebruik de beschikbare API-routes."})
 
 # Config laden
 def load_settings():
@@ -67,7 +66,7 @@ def update_dashboard_periodically():
         while True:
             with app.app_context():
                 send_dashboard_data()
-            socketio.sleep(10)  # Gebruik socketio.sleep()
+            socketio.sleep(10)
 
     socketio.start_background_task(run)
 
@@ -124,7 +123,7 @@ def update_settings():
         json.dump(new_settings, file, indent=4)
     return jsonify({"message": "Instellingen bijgewerkt!"})
 
-# Start de server
+# ✅ Zorg dat Heroku de juiste WSGI server gebruikt
 if __name__ == "__main__":
     update_dashboard_periodically()
     update_bot_status_periodically()

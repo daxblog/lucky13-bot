@@ -3,12 +3,12 @@ import random
 import os
 import signal
 import sys
-from flask_socketio import SocketIO
-from flask import Flask
 import threading
 import json
 import ccxt
 import logging
+from flask_socketio import SocketIO
+from flask import Flask
 
 # Logging setup
 DEBUG_MODE = False  # Zet op True voor gedetailleerde logs
@@ -29,15 +29,15 @@ TRADE_PERCENTAGE = 0.02
 STOP_LOSS_PERCENTAGE = 0.03
 TAKE_PROFIT_PERCENTAGE = 0.05
 
-BALANCE_FILE = "balance.json"  # Lokaal bestand om balans op te slaan
+BALANCE_FILE = "balance.json"
 running = True
 
+# 📌 SIGTERM-signaal afvangen voor veilige afsluiting
 def handle_exit(sig, frame):
     global running
     print("Bot wordt gestopt...")
     running = False
 
-# SIGTERM-signaal afvangen voor veilige afsluiting
 signal.signal(signal.SIGTERM, handle_exit)
 signal.signal(signal.SIGINT, handle_exit)
 
@@ -46,12 +46,10 @@ def connect_to_bybit():
     api_key = 'BlgHo4zOTHeThKDWsj'  
     api_secret = 'cWwuFxIBZLzyBWJ4NrWpkIY5RS18O3Mns3DR'  
     
-    exchange = ccxt.bybit({
+    return ccxt.bybit({
         'apiKey': api_key,
         'secret': api_secret,
     })
-    
-    return exchange
 
 # 📌 Functie om accountbalans op te halen en lokaal op te slaan
 def fetch_account_balance():
@@ -59,21 +57,24 @@ def fetch_account_balance():
     try:
         balance = exchange.fetch_balance()
         usdt_balance = balance['total'].get('USDT', 0)
-        
+
         # Opslaan in lokaal bestand
         with open(BALANCE_FILE, "w") as file:
             json.dump({"USDT": usdt_balance}, file)
-        
-        return {'total': {'USDT': usdt_balance}}
+
+        return {'total': usdt_balance}
     except (ccxt.NetworkError, ccxt.BaseError) as e:
-        logging.warning(f"Fout bij het ophalen van saldo: {e}")
-        
+        logging.warning(f"Fout bij ophalen saldo: {e}")
+
         # Laatste bekende balans ophalen als API faalt
         if os.path.exists(BALANCE_FILE):
             with open(BALANCE_FILE, "r") as file:
-                return {'total': json.load(file)}
-        
-        return {'total': {'USDT': 0}}
+                try:
+                    return {'total': json.load(file).get("USDT", 0)}
+                except json.JSONDecodeError:
+                    return {'total': 0}
+
+        return {'total': 0}
 
 # 📌 Simuleer het ophalen van de huidige prijs van een symbool
 def get_current_price(symbol):
@@ -81,53 +82,47 @@ def get_current_price(symbol):
 
 # 📌 Simuleer actieve trades ophalen
 def get_active_trades():
-    trades = []
-    for symbol in TRADING_SYMBOLS:
-        trades.append({
-            'symbol': symbol,
-            'status': 'active',
-            'current_profit': round(random.uniform(-0.03, 0.05), 2)
-        })
-    return trades
+    return [{'symbol': symbol, 'status': 'active', 'current_profit': round(random.uniform(-0.03, 0.05), 2)}
+            for symbol in TRADING_SYMBOLS]
 
 # 📌 Verzend dashboardgegevens
 def send_dashboard_data():
     balance = fetch_account_balance()
     active_trades = get_active_trades()
-    
-    socketio.emit('update_balance', {'balance': balance['total']['USDT']})
-    socketio.emit('update_trades', {'trades': active_trades})
-    logging.info(f"Dashboard geüpdatet: Balans {balance['total']['USDT']} USDT")
 
-# 📌 Functie die de trading-logica uitvoert met trailing stop-loss
+    socketio.emit('update_balance', {'balance': balance['total']})
+    socketio.emit('update_trades', {'trades': active_trades})
+    logging.info(f"Dashboard geüpdatet: Balans {balance['total']} USDT")
+
+# 📌 Trading-logica met trailing stop-loss
 def start_bot():
     global running
-    open_trades = {}  # Houd actieve trades bij en hun hoogste prijs
-    
+    open_trades = {}
+
     while running:
         symbol = random.choice(TRADING_SYMBOLS)
         balance = fetch_account_balance()
-        usdt_balance = balance['total']['USDT']
+        usdt_balance = balance['total']
 
         if usdt_balance > 10:  # Minimaal 10 USDT nodig
             current_price = get_current_price(symbol)
-            
+
             if symbol not in open_trades:
                 # Nieuwe trade openen
                 trade_amount = (usdt_balance * TRADE_PERCENTAGE) / current_price
                 entry_price = current_price
                 stop_loss_price = entry_price * (1 - STOP_LOSS_PERCENTAGE)
-                
+
                 open_trades[symbol] = {
                     "entry_price": entry_price,
-                    "highest_price": entry_price,  # Start met de instapprijs
+                    "highest_price": entry_price,
                     "stop_loss": stop_loss_price
                 }
-                
+
                 logging.info(f"✅ Nieuwe trade op {symbol} geopend tegen {entry_price}, SL: {stop_loss_price}")
 
             else:
-                # Bestaande trade updaten
+                # Update bestaande trade
                 trade = open_trades[symbol]
                 trade["highest_price"] = max(trade["highest_price"], current_price)
 
@@ -141,19 +136,21 @@ def start_bot():
                 # Stop-loss controleren
                 if current_price <= trade["stop_loss"]:
                     logging.info(f"❌ Trade op {symbol} gesloten tegen {current_price} (SL geraakt)")
-                    del open_trades[symbol]  # Verwijder de trade
-                
+                    del open_trades[symbol]
+
         time.sleep(5)  # Wacht 5 seconden tussen trades
 
-# 📌 Start bot en update dashboard periodiek
-def start():
-    global running
-    thread = threading.Thread(target=start_bot)
-    thread.start()
-    
+# 📌 Aparte thread voor het updaten van het dashboard
+def dashboard_updater():
     while running:
         send_dashboard_data()
         time.sleep(10)
+
+# 📌 Start de bot en de dashboard-updates
+def start():
+    global running
+    threading.Thread(target=start_bot, daemon=True).start()
+    threading.Thread(target=dashboard_updater, daemon=True).start()
 
 if __name__ == "__main__":
     print("Lucky13 Bot gestart!")

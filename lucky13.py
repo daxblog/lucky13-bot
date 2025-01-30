@@ -11,14 +11,14 @@ from flask import Flask
 import eventlet
 import eventlet.wsgi
 
-# Logging setup
-DEBUG_MODE = False  # Zet op True voor gedetailleerde logs
+# Logging setup (Fix Unicode probleem door UTF-8 encoding)
+DEBUG_MODE = False
 LOG_FILE = "bot.log"
 
 logging.basicConfig(
     level=logging.DEBUG if DEBUG_MODE else logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_FILE)]
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler(sys.stdout)]
 )
 
 # Flask setup
@@ -38,7 +38,7 @@ running = True
 # SIGTERM-signaal afvangen voor veilige afsluiting
 def handle_exit(sig, frame):
     global running
-    logging.info("❌ Bot wordt gestopt...")
+    logging.info("Bot wordt gestopt...")
     running = False
 
 signal.signal(signal.SIGTERM, handle_exit)
@@ -50,7 +50,7 @@ def connect_to_bybit():
     api_secret = os.getenv("BYBIT_API_SECRET")
 
     if not api_key or not api_secret:
-        logging.error("❌ API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
+        logging.error("API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
         sys.exit(1)
 
     return ccxt.bybit({
@@ -64,14 +64,14 @@ def fetch_account_balance():
     try:
         balance = exchange.fetch_balance()
         usdt_balance = balance['total'].get('USDT', 0)
-        with open(BALANCE_FILE, "w") as file:
+        with open(BALANCE_FILE, "w", encoding="utf-8") as file:
             json.dump({"USDT": usdt_balance}, file)
         socketio.emit('update_balance', {'balance': usdt_balance})
         return {'total': usdt_balance}
     except (ccxt.NetworkError, ccxt.BaseError) as e:
-        logging.warning(f"⚠️ Fout bij ophalen saldo: {e}")
+        logging.warning(f"Fout bij ophalen saldo: {e}")
         if os.path.exists(BALANCE_FILE):
-            with open(BALANCE_FILE, "r") as file:
+            with open(BALANCE_FILE, "r", encoding="utf-8") as file:
                 try:
                     return {'total': json.load(file).get("USDT", 0)}
                 except json.JSONDecodeError:
@@ -85,7 +85,7 @@ def get_current_price(symbol):
 # Trading-logica
 def start_bot():
     global running
-    logging.info("🚀 Trading bot gestart en actief...")
+    logging.info("Trading bot gestart en actief...")
 
     open_trades = {}
     while running:
@@ -94,7 +94,7 @@ def start_bot():
         usdt_balance = balance['total']
 
         if usdt_balance < 10:
-            logging.warning(f"⚠️ Portfolio te laag: slechts {usdt_balance} USDT beschikbaar.")
+            logging.warning(f"Portfolio te laag: slechts {usdt_balance} USDT beschikbaar.")
             time.sleep(5)
             continue
 
@@ -104,7 +104,7 @@ def start_bot():
         stop_loss_price = current_price * (1 - STOP_LOSS_PERCENTAGE)
         take_profit_price = current_price * (1 + TAKE_PROFIT_PERCENTAGE)
 
-        logging.info(f"✅ Nieuwe trade op {symbol} geopend tegen {current_price} USDT. "
+        logging.info(f"Nieuwe trade op {symbol} geopend tegen {current_price} USDT. "
                      f"SL: {stop_loss_price} USDT, TP: {take_profit_price} USDT. "
                      f"Totale investering: {investment} USDT")
         
@@ -114,16 +114,16 @@ def start_bot():
             "take_profit": take_profit_price
         }
 
-        time.sleep(5)  # Wacht 5 seconden tussen trades
+        time.sleep(5)
 
         # Simuleer trade-afhandeling
         final_price = get_current_price(symbol)
         profit = final_price - current_price
         percentage_change = (profit / current_price) * 100
-        logging.info(f"📊 {symbol} huidige winst/verlies: {percentage_change:.2f}% ten opzichte van investering.")
+        logging.info(f"{symbol} huidige winst/verlies: {percentage_change:.2f}% ten opzichte van investering.")
         
         if final_price <= stop_loss_price or final_price >= take_profit_price:
-            logging.info(f"❌ Trade op {symbol} gesloten tegen {final_price} USDT. "
+            logging.info(f"Trade op {symbol} gesloten tegen {final_price} USDT. "
                          f"Winst/verlies: {profit:.2f} USDT ({percentage_change:.2f}%)")
             del open_trades[symbol]
 
@@ -134,9 +134,9 @@ def start():
     socketio.start_background_task(start_bot)
 
 if __name__ == "__main__":
-    logging.info("🚀 Lucky13 Bot wordt gestart...")
+    logging.info("Lucky13 Bot wordt gestart...")
     port = int(os.environ.get("PORT", 5000))
     start()
     socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
-    logging.info("❌ Bot is gestopt.")
+    logging.info("Bot is gestopt.")
     sys.exit(0)

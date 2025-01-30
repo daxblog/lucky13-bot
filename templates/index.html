@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lucky13 Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: 'Roboto', sans-serif;
@@ -56,6 +57,10 @@
         }
         .start-button { background-color: #6f42c1; }
         .stop-button { background-color: #000; }
+        canvas {
+            width: 100%;
+            height: 400px;
+        }
     </style>
 </head>
 <body>
@@ -75,16 +80,18 @@
         <h3>Active Trades</h3>
         <div id="trades-list"><p>Loading active trades...</p></div>
     </div>
-    <div class="button-container">
-        <button class="start-button" onclick="startBot()">Start Bot</button>
-        <button class="stop-button" onclick="stopBot()">Stop Bot</button>
+    <!-- Toevoegen van de grafiek -->
+    <div class="card">
+        <h3>Winnings and Deposits Graph</h3>
+        <canvas id="winningsChart"></canvas>
     </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
 <script>
     const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/");
-    
+
+    // Functie om botstatus te updaten
     function updateBotStatus() {
         fetch("/bot-status")
             .then(response => response.json())
@@ -101,10 +108,12 @@
             .catch(error => console.error("Error checking bot status:", error));
     }
 
+    // WebSocket om de accountbalans te ontvangen
     socket.on('update_balance', data => {
         document.getElementById("balance").innerHTML = `Balance: ${data.balance} USDT`;
     });
 
+    // WebSocket om de actieve trades te ontvangen
     socket.on('update_trades', data => {
         let tradesList = document.getElementById("trades-list");
         tradesList.innerHTML = '';
@@ -116,27 +125,49 @@
         });
     });
 
-    function startBot() {
-        fetch('/start-bot', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.status);
-                updateBotStatus();
-            })
-            .catch(error => console.error("Error starting bot:", error));
+    // Functie om winsten en stortingen op te halen en grafiek te updaten
+    function updateGraph() {
+        Promise.all([
+            fetch("/api/winnings").then(res => res.json()),  // Ophalen van winsten
+            fetch("/api/settings").then(res => res.json())  // Ophalen van de instellingen voor stortingen (als voorbeeld)
+        ])
+        .then(([winningsData, settings]) => {
+            const winnings = winningsData.winnings;
+            const deposits = settings.stop_loss_percentage * 100;  // Gebruik instellingen als een voorbeeld voor stortingen
+            updateChart(winnings, deposits);
+        })
+        .catch(error => console.error("Error fetching graph data:", error));
     }
 
-    function stopBot() {
-        fetch('/stop-bot', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                alert(data.status);
-                updateBotStatus();
-            })
-            .catch(error => console.error("Error stopping bot:", error));
+    // Functie om de grafiek bij te werken
+    function updateChart(winnings, deposits) {
+        const ctx = document.getElementById('winningsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Winsten', 'Stortingen'],
+                datasets: [{
+                    label: 'USDT',
+                    data: [winnings, deposits],
+                    backgroundColor: ['#28a745', '#dc3545'],
+                    borderColor: ['#28a745', '#dc3545'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
     }
 
+    // Initialiseer de grafiek bij het laden van de pagina
+    updateGraph();
     updateBotStatus();
+
 </script>
 
 </body>

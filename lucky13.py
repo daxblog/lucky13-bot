@@ -156,6 +156,10 @@ if __name__ == "__main__":
     print("Lucky13 Bot gestart!")
     start()
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=DEBUG_MODE)
+    import eventlet
+    eventlet.monkey_patch()  # Zorgt dat eventlet goed werkt met Flask
+
+    socketio.run(app, host="0.0.0.0", port=port, debug=DEBUG_MODE, allow_unsafe_werkzeug=True)
+
     print("Bot is gestopt.")
     sys.exit(0)

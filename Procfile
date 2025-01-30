@@ -1,1 +1,1 @@
-web: python lucky13.py
+web: gunicorn -k eventlet app:app

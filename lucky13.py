@@ -65,6 +65,8 @@ def fetch_account_balance():
         with open(BALANCE_FILE, "w") as file:
             json.dump({"USDT": usdt_balance}, file)
 
+        # Stuur de balance via SocketIO naar het dashboard
+        socketio.emit('update_balance', {'balance': usdt_balance})
         return {'total': usdt_balance}
     except (ccxt.NetworkError, ccxt.BaseError) as e:
         logging.warning(f"Fout bij ophalen saldo: {e}")
@@ -79,7 +81,7 @@ def fetch_account_balance():
 
         return {'total': 0}
 
-# 📌 Functie om winsten op te slaan
+# 📌 Functie om winsten op te slaan en naar het dashboard te sturen
 def save_winnings(total_win):
     winnings_data = {}
     if os.path.exists(WINNINGS_FILE):
@@ -94,6 +96,9 @@ def save_winnings(total_win):
 
     with open(WINNINGS_FILE, "w") as file:
         json.dump(winnings_data, file)
+
+    # Stuur de winsten naar het dashboard via SocketIO
+    socketio.emit('update_winnings', {'winnings': winnings_data["total_win"]})
 
 # 📌 Simuleer het ophalen van de huidige prijs van een symbool
 def get_current_price(symbol):

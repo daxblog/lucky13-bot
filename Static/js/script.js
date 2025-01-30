@@ -13,66 +13,75 @@ let balanceChart = null;
 
 // Update de balans op de pagina
 function updateBalance(data) {
-    saldoElement.innerText = `Saldo: ${data.balance.toFixed(2)} USDT`;
+    if (saldoElement) {
+        saldoElement.innerText = `Saldo: ${data.balance.toFixed(2)} USDT`;
+    }
 }
 
 // Update de lijst van actieve trades
 function updateActiveTrades(data) {
-    activeTradesContainer.innerHTML = ""; // Clear bestaande trades
+    if (activeTradesContainer) {
+        activeTradesContainer.innerHTML = ""; // Clear bestaande trades
 
-    data.trades.forEach(trade => {
-        const tradeElement = document.createElement("div");
-        tradeElement.className = `trade-item ${trade.current_profit > 0 ? 'success' : 'failure'}`;
-        tradeElement.innerHTML = `
-            <span>Trade: ${trade.symbol}</span>
-            <span>Status: ${trade.current_profit > 0 ? 'Profit' : 'Loss'}</span>
-            <span>Winst/Verlies: ${trade.current_profit > 0 ? '+' : ''}${(trade.current_profit * 100).toFixed(2)}%</span>
-        `;
-        activeTradesContainer.appendChild(tradeElement);
-    });
+        data.trades.forEach(trade => {
+            const tradeElement = document.createElement("div");
+            tradeElement.className = `trade-item ${trade.current_profit > 0 ? 'success' : 'failure'}`;
+            tradeElement.innerHTML = `
+                <span>Trade: ${trade.symbol}</span>
+                <span>Status: ${trade.current_profit > 0 ? 'Profit' : 'Loss'}</span>
+                <span>Winst/Verlies: ${trade.current_profit > 0 ? '+' : ''}${(trade.current_profit * 100).toFixed(2)}%</span>
+            `;
+            activeTradesContainer.appendChild(tradeElement);
+        });
+    }
 }
 
 // Foutmeldingen tonen
 function showErrorMessages(messages) {
-    errorMessageContainer.innerHTML = ""; // Clear bestaande berichten
+    if (errorMessageContainer) {
+        errorMessageContainer.innerHTML = ""; // Clear bestaande berichten
 
-    messages.forEach(message => {
-        const messageElement = document.createElement("div");
-        messageElement.className = "error-message";
-        messageElement.innerText = message;
-        errorMessageContainer.appendChild(messageElement);
-    });
+        messages.forEach(message => {
+            const messageElement = document.createElement("div");
+            messageElement.className = "error-message";
+            messageElement.innerText = message;
+            errorMessageContainer.appendChild(messageElement);
+        });
+    }
 }
 
 // Grafiek bijwerken voor winsten en stortingen
 function updateGraph(winnings, deposits) {
-    if (balanceChart) {
-        balanceChart.destroy(); // Verwijder de bestaande grafiek om duplicatie te voorkomen
-    }
+    if (chartContainer) {
+        if (balanceChart) {
+            balanceChart.destroy(); // Verwijder de bestaande grafiek om duplicatie te voorkomen
+        }
 
-    const ctx = chartContainer.getContext("2d");
-    const chartData = {
-        labels: ['Winsten', 'Stortingen'],  // Labels voor de grafiek
-        datasets: [{
-            label: 'USDT',
-            data: [winnings, deposits],  // Gegevens voor winsten en stortingen
-            backgroundColor: ['#28a745', '#dc3545'],
-            borderColor: ['#28a745', '#dc3545'],
-            borderWidth: 1
-        }]
-    };
+        const ctx = chartContainer.getContext("2d");
+        const chartData = {
+            labels: ['Winsten', 'Stortingen'],  // Labels voor de grafiek
+            datasets: [{
+                label: 'USDT',
+                data: [winnings, deposits],  // Gegevens voor winsten en stortingen
+                backgroundColor: ['#28a745', '#dc3545'],
+                borderColor: ['#28a745', '#dc3545'],
+                borderWidth: 1
+            }]
+        };
 
-    balanceChart = new Chart(ctx, {
-        type: 'bar',
-        data: chartData,
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
+        balanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
-            }
+            });
         });
+    }
 }
 
 // Bot status bijwerken
@@ -92,7 +101,11 @@ socket.on('error_messages', showErrorMessages);
 // Bot status event
 socket.on('bot_status', function(data) {
     console.log("Bot status ontvangen:", data);  // Voeg deze regel toe voor debugging
-    updateBotStatus(data.running);
+    if (data && data.hasOwnProperty('running')) {
+        updateBotStatus(data.running);
+    } else {
+        console.error("Ongeldige botstatus data:", data);
+    }
 });
 
 // Exporteer de grafiek naar een CSV bestand
@@ -104,6 +117,11 @@ function exportChartToCSV() {
 
     const labels = balanceChart.data.labels;
     const values = balanceChart.data.datasets[0].data;
+
+    if (!labels || labels.length === 0 || !values || values.length === 0) {
+        alert("Geen gegevens beschikbaar voor export.");
+        return;
+    }
 
     let csvContent = "Label,Value\n";
     labels.forEach((label, index) => {
@@ -129,43 +147,53 @@ if (exportButton) {
 // Instellingen tabbladen wisselen
 document.addEventListener("DOMContentLoaded", function () {
     // Tabbladen wisselen
-    document.getElementById("home-tab").addEventListener("click", function() {
-        document.getElementById("home-content").style.display = "block";
-        document.getElementById("settings-content").style.display = "none";
-    });
+    const homeTab = document.getElementById("home-tab");
+    const settingsTab = document.getElementById("settings-tab");
 
-    document.getElementById("settings-tab").addEventListener("click", function() {
-        document.getElementById("home-content").style.display = "none";
-        document.getElementById("settings-content").style.display = "block";
-        loadSettings();
-    });
+    if (homeTab) {
+        homeTab.addEventListener("click", function() {
+            document.getElementById("home-content").style.display = "block";
+            document.getElementById("settings-content").style.display = "none";
+        });
+    }
+
+    if (settingsTab) {
+        settingsTab.addEventListener("click", function() {
+            document.getElementById("home-content").style.display = "none";
+            document.getElementById("settings-content").style.display = "block";
+            loadSettings();
+        });
+    }
 
     // Instellingen opslaan
-    document.getElementById("settings-form").addEventListener("submit", function(event) {
-        event.preventDefault();
+    const settingsForm = document.getElementById("settings-form");
+    if (settingsForm) {
+        settingsForm.addEventListener("submit", function(event) {
+            event.preventDefault();
 
-        const settings = {
-            trade_percentage: parseFloat(document.getElementById("trade-percentage").value),
-            stop_loss_percentage: parseFloat(document.getElementById("stop-loss-percentage").value),
-            take_profit_percentage: parseFloat(document.getElementById("take-profit-percentage").value)
-        };
+            const settings = {
+                trade_percentage: parseFloat(document.getElementById("trade-percentage").value),
+                stop_loss_percentage: parseFloat(document.getElementById("stop-loss-percentage").value),
+                take_profit_percentage: parseFloat(document.getElementById("take-profit-percentage").value)
+            };
 
-        fetch("/api/settings", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(settings)
-        })
-        .then(response => response.json())
-        .then(data => {
-            alert(data.message);
-        })
-        .catch(error => {
-            console.error("Fout bij opslaan van instellingen:", error);
-            alert("Kon de instellingen niet opslaan.");
+            fetch("/api/settings", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(settings)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+            })
+            .catch(error => {
+                console.error("Fout bij opslaan van instellingen:", error);
+                alert("Kon de instellingen niet opslaan.");
+            });
         });
-    });
+    }
 
     // Instellingen laden bij het openen van de instellingen tab
     function loadSettings() {
@@ -178,6 +206,7 @@ document.addEventListener("DOMContentLoaded", function () {
             })
             .catch(error => {
                 console.error("Fout bij laden van instellingen:", error);
+                alert("Er is een fout opgetreden bij het laden van de instellingen.");
             });
     }
 });

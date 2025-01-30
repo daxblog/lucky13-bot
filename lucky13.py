@@ -32,6 +32,7 @@ STOP_LOSS_PERCENTAGE = 0.03
 TAKE_PROFIT_PERCENTAGE = 0.05
 
 BALANCE_FILE = "balance.json"
+WINNINGS_FILE = "winnings.json"
 running = True
 
 # 📌 SIGTERM-signaal afvangen voor veilige afsluiting
@@ -77,6 +78,22 @@ def fetch_account_balance():
                     return {'total': 0}
 
         return {'total': 0}
+
+# 📌 Functie om winsten op te slaan
+def save_winnings(total_win):
+    winnings_data = {}
+    if os.path.exists(WINNINGS_FILE):
+        try:
+            with open(WINNINGS_FILE, "r") as file:
+                winnings_data = json.load(file)
+        except json.JSONDecodeError:
+            logging.error("Fout bij het laden van winnings.json. Bestandsinhoud is ongeldig.")
+    
+    # Voeg de nieuwe winst toe
+    winnings_data["total_win"] = winnings_data.get("total_win", 0) + total_win
+
+    with open(WINNINGS_FILE, "w") as file:
+        json.dump(winnings_data, file)
 
 # 📌 Simuleer het ophalen van de huidige prijs van een symbool
 def get_current_price(symbol):
@@ -138,9 +155,19 @@ def start_bot():
                 # Stop-loss controleren
                 if current_price <= trade["stop_loss"]:
                     logging.info(f"❌ Trade op {symbol} gesloten tegen {current_price} (SL geraakt)")
+                    profit = calculate_profit(symbol, trade["entry_price"], current_price)
+                    save_winnings(profit)  # Sla de winst op
                     del open_trades[symbol]
 
         time.sleep(5)  # Wacht 5 seconden tussen trades
+
+# 📌 Functie om winst te berekenen en op te slaan
+def calculate_profit(symbol, entry_price, current_price):
+    profit = 0
+    if current_price > entry_price:
+        profit = (current_price - entry_price) * 0.02  # Veronderstel 2% winst per succesvolle trade
+    save_winnings(profit)  # Sla de winst op
+    return profit
 
 # 📌 Aparte thread voor het updaten van het dashboard
 def dashboard_updater():

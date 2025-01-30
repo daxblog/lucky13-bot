@@ -1,1 +1,1 @@
-web: gunicorn lucky13:app
+web: python lucky13.py

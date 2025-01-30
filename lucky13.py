@@ -203,7 +203,6 @@ def dashboard_updater():
 
 # 📌 Start de bot en de dashboard-updates
 def start():
-    global running
     threading.Thread(target=start_bot, daemon=True).start()
     threading.Thread(target=dashboard_updater, daemon=True).start()
     threading.Thread(target=send_bot_status, daemon=True).start()

@@ -75,6 +75,21 @@ def fetch_account_balance():
         
         return {'total': {'USDT': 0}}
 
+# 📌 Simuleer het ophalen van de huidige prijs van een symbool
+def get_current_price(symbol):
+    return round(random.uniform(20000, 50000), 2) if symbol == "BTC/USDT" else round(random.uniform(1000, 4000), 2)
+
+# 📌 Simuleer actieve trades ophalen
+def get_active_trades():
+    trades = []
+    for symbol in TRADING_SYMBOLS:
+        trades.append({
+            'symbol': symbol,
+            'status': 'active',
+            'current_profit': round(random.uniform(-0.03, 0.05), 2)
+        })
+    return trades
+
 # 📌 Verzend dashboardgegevens
 def send_dashboard_data():
     balance = fetch_account_balance()
@@ -83,6 +98,22 @@ def send_dashboard_data():
     socketio.emit('update_balance', {'balance': balance['total']['USDT']})
     socketio.emit('update_trades', {'trades': active_trades})
     logging.info(f"Dashboard geüpdatet: Balans {balance['total']['USDT']} USDT")
+
+# 📌 Functie die de trading-logica uitvoert
+def start_bot():
+    global running
+    while running:
+        symbol = random.choice(TRADING_SYMBOLS)
+        balance = fetch_account_balance()
+        usdt_balance = balance['total']['USDT']
+
+        if usdt_balance > 10:  # Voorwaarde: minimaal 10 USDT nodig
+            current_price = get_current_price(symbol)
+            if current_price is not None:
+                trade_amount = (usdt_balance * TRADE_PERCENTAGE) / current_price
+                logging.info(f"Trade geplaatst op {symbol} met {trade_amount:.6f} {symbol.split('/')[0]}")
+
+        time.sleep(5)  # Wacht 5 seconden tussen trades
 
 # 📌 Start bot en update dashboard periodiek
 def start():

@@ -31,39 +31,16 @@
             margin-bottom: 20px;
             border-radius: 10px;
         }
-        .card h3 {
-            margin: 0;
-            font-weight: 500;
-        }
-        .card p {
-            font-weight: 400;
-            color: #555;
-        }
-        .balance, .trades {
-            display: flex;
-            justify-content: space-between;
-        }
-        .trade-item {
-            background-color: #f1f1f1;
+        .status {
             padding: 10px;
-            margin: 5px 0;
+            background-color: #ffc107;
+            color: black;
+            text-align: center;
             border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .trade-item span {
             font-weight: 500;
         }
-        .trade-item.success {
-            background-color: #28a745;
-        }
-        .trade-item.failure {
-            background-color: #dc3545;
-        }
-        #chart {
-            width: 100%;
-            height: 300px;
-        }
+        .success { background-color: #28a745; color: white; }
+        .failure { background-color: #dc3545; color: white; }
         .button-container {
             display: flex;
             justify-content: center;
@@ -71,216 +48,95 @@
         }
         button {
             padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
+            margin: 0 10px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            margin: 0 10px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .start-button {
-            background-color: #6f42c1; /* Donkerpaars voor starten */
-        }
-        .stop-button {
-            background-color: #000; /* Zwart voor stoppen */
-        }
-        /* Navigation styles */
-        #nav {
-            list-style: none;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            background-color: #343a40;
-            margin: 0;
-        }
-        #nav li {
-            margin: 10px;
-        }
-        #nav li a {
-            color: white;
-            text-decoration: none;
-            font-weight: 500;
-            padding: 10px;
-        }
-        #nav li a:hover {
-            background-color: #0056b3;
-            border-radius: 5px;
-        }
-        #settings-content {
-            display: none;
-        }
-        /* Form styling */
-        form input {
-            padding: 10px;
-            margin: 5px 0;
-            width: 100%;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-        }
-        form button {
-            background-color: #28a745;
             color: white;
         }
+        .start-button { background-color: #6f42c1; }
+        .stop-button { background-color: #000; }
     </style>
 </head>
 <body>
 
-<header>
-    Lucky13 - Trading Dashboard
-</header>
+<header>Lucky13 - Trading Dashboard</header>
 
 <div class="container">
-    <!-- Navigation Bar -->
-    <ul id="nav">
-        <li><a href="#" id="home-tab">Home</a></li>
-        <li><a href="#" id="settings-tab">Settings</a></li>
-    </ul>
-    
-    <!-- Home Tab Content -->
-    <div id="home-content">
-        <h2>Dashboard</h2>
-
-        <div class="card">
-            <h3>Account Balance</h3>
-            <p id="balance">Loading...</p>
-        </div>
-
-        <div class="card">
-            <h3>Active Trades</h3>
-            <div id="trades-list">
-                <p>Loading active trades...</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3>Trading Performance</h3>
-            <div id="chart"></div>
-        </div>
-
-        <div class="button-container">
-            <button class="start-button" onclick="startBot()">Start Bot</button>
-            <button class="stop-button" onclick="stopBot()">Stop Bot</button>
-        </div>
+    <div class="card">
+        <h3>Bot Status</h3>
+        <p id="bot-status" class="status">Checking status...</p>
     </div>
-
-    <!-- Settings Tab Content -->
-    <div id="settings-content">
-        <h2>Bot Instellingen</h2>
-        <form id="settings-form">
-            <label for="trade-percentage">Trade Percentage: </label>
-            <input type="number" id="trade-percentage" name="trade_percentage" step="0.01" required><br><br>
-
-            <label for="stop-loss-percentage">Stop Loss Percentage: </label>
-            <input type="number" id="stop-loss-percentage" name="stop_loss_percentage" step="0.01" required><br><br>
-
-            <label for="take-profit-percentage">Take Profit Percentage: </label>
-            <input type="number" id="take-profit-percentage" name="take_profit_percentage" step="0.01" required><br><br>
-
-            <button type="submit">Opslaan</button>
-        </form>
+    <div class="card">
+        <h3>Account Balance</h3>
+        <p id="balance">Loading...</p>
+    </div>
+    <div class="card">
+        <h3>Active Trades</h3>
+        <div id="trades-list"><p>Loading active trades...</p></div>
+    </div>
+    <div class="button-container">
+        <button class="start-button" onclick="startBot()">Start Bot</button>
+        <button class="stop-button" onclick="stopBot()">Stop Bot</button>
     </div>
 </div>
 
-<!-- Include Socket.IO -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-    // Updated to the Heroku URL
     const socket = io.connect("https://lucky13-bot-8b1fa5884ddc.herokuapp.com/");
+    
+    function updateBotStatus() {
+        fetch("/bot-status")
+            .then(response => response.json())
+            .then(data => {
+                const statusElement = document.getElementById("bot-status");
+                if (data.running) {
+                    statusElement.textContent = "Bot is running";
+                    statusElement.className = "status success";
+                } else {
+                    statusElement.textContent = "Bot is stopped";
+                    statusElement.className = "status failure";
+                }
+            })
+            .catch(error => console.error("Error checking bot status:", error));
+    }
 
-    // Update the balance in real-time
-    socket.on('update_balance', function(data) {
+    socket.on('update_balance', data => {
         document.getElementById("balance").innerHTML = `Balance: ${data.balance} USDT`;
     });
 
-    // Update the active trades in real-time
-    socket.on('update_trades', function(data) {
+    socket.on('update_trades', data => {
         let tradesList = document.getElementById("trades-list");
         tradesList.innerHTML = '';
         data.trades.forEach(trade => {
             const tradeDiv = document.createElement('div');
-            tradeDiv.classList.add('trade-item');
-            tradeDiv.classList.add(trade.current_profit > 0 ? 'success' : 'failure');
-            tradeDiv.innerHTML = `
-                <span>${trade.symbol}</span>
-                <span>${trade.current_profit > 0 ? '+' : ''}${(trade.current_profit * 100).toFixed(2)}%</span>
-            `;
+            tradeDiv.classList.add('trade-item', trade.current_profit > 0 ? 'success' : 'failure');
+            tradeDiv.innerHTML = `<span>${trade.symbol}</span> <span>${(trade.current_profit * 100).toFixed(2)}%</span>`;
             tradesList.appendChild(tradeDiv);
         });
     });
 
-    // Function to start the bot
     function startBot() {
-        fetch('/start-bot', {
-            method: 'POST'
-        }).then(response => response.json())
-          .then(data => alert(data.status));
-    }
-
-    // Function to stop the bot
-    function stopBot() {
-        fetch('/stop-bot', {
-            method: 'POST'
-        }).then(response => response.json())
-          .then(data => alert(data.status));
-    }
-
-    // Tab switching logic
-    document.addEventListener("DOMContentLoaded", function () {
-        // Home and Settings tab switching
-        document.getElementById("home-tab").addEventListener("click", function() {
-            document.getElementById("home-content").style.display = "block";
-            document.getElementById("settings-content").style.display = "none";
-        });
-
-        document.getElementById("settings-tab").addEventListener("click", function() {
-            document.getElementById("home-content").style.display = "none";
-            document.getElementById("settings-content").style.display = "block";
-            loadSettings();
-        });
-
-        // Settings form submission
-        document.getElementById("settings-form").addEventListener("submit", function(event) {
-            event.preventDefault();
-
-            const settings = {
-                trade_percentage: parseFloat(document.getElementById("trade-percentage").value),
-                stop_loss_percentage: parseFloat(document.getElementById("stop-loss-percentage").value),
-                take_profit_percentage: parseFloat(document.getElementById("take-profit-percentage").value)
-            };
-
-            fetch("/api/settings", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(settings)
-            })
+        fetch('/start-bot', { method: 'POST' })
             .then(response => response.json())
             .then(data => {
-                alert(data.message);
+                alert(data.status);
+                updateBotStatus();
             })
-            .catch(error => {
-                console.error("Error updating settings:", error);
-            });
-        });
+            .catch(error => console.error("Error starting bot:", error));
+    }
 
-        // Load settings when the settings tab is clicked
-        function loadSettings() {
-            fetch("/api/settings")
-                .then(response => response.json())
-                .then(settings => {
-                    document.getElementById("trade-percentage").value = settings.trade_percentage || 0.02;
-                    document.getElementById("stop-loss-percentage").value = settings.stop_loss_percentage || 0.03;
-                    document.getElementById("take-profit-percentage").value = settings.take_profit_percentage || 0.05;
-                })
-                .catch(error => {
-                    console.error("Error loading settings:", error);
-                });
-        }
-    });
+    function stopBot() {
+        fetch('/stop-bot', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.status);
+                updateBotStatus();
+            })
+            .catch(error => console.error("Error stopping bot:", error));
+    }
+
+    updateBotStatus();
 </script>
 
 </body>

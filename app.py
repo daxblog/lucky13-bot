@@ -125,6 +125,9 @@ def update_settings():
 
 # ✅ Verwijder gunicorn run call, gebruik de correcte manier om Heroku te draaien
 if __name__ == "__main__":
-    update_dashboard_periodically()
-    update_bot_status_periodically()
+    # Start achtergrondtaken voor periodieke updates
+    socketio.start_background_task(update_dashboard_periodically)
+    socketio.start_background_task(update_bot_status_periodically)
+    
+    # Run de Flask app voor Heroku
     socketio.run(app, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # Start server voor Heroku

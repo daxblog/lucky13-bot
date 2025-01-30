@@ -23,15 +23,10 @@ CONFIG_FILE = "config.json"
 BALANCE_FILE = "balance.json"
 WINNINGS_FILE = "winnings.json"
 
-# ✅ Verwijder "Lucky13 Bot Dashboard is running!" en geef een nette JSON-response
+# Root route om de HTML-pagina van het dashboard te tonen
 @app.route("/")
 def home():
-    return jsonify({"status": "API is online", "message": "Gebruik de beschikbare API-routes."})
-
-# Dashboard route die een HTML-pagina retourneert
-@app.route("/dashboard")
-def dashboard():
-    return render_template("dashboard.html")  # Zorg ervoor dat je een dashboard.html bestand hebt
+    return render_template("index.html")  # Verander naar index.html, als dit de naam is van je bestand
 
 # Config laden
 def load_settings():
@@ -132,4 +127,4 @@ def update_settings():
 if __name__ == "__main__":
     update_dashboard_periodically()
     update_bot_status_periodically()
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))  # Start server voor Heroku

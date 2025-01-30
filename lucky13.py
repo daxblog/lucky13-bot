@@ -29,6 +29,7 @@ TRADE_PERCENTAGE = 0.02
 STOP_LOSS_PERCENTAGE = 0.03
 TAKE_PROFIT_PERCENTAGE = 0.05
 
+BALANCE_FILE = "balance.json"  # Lokaal bestand om balans op te slaan
 running = True
 
 def handle_exit(sig, frame):
@@ -39,19 +40,6 @@ def handle_exit(sig, frame):
 # SIGTERM-signaal afvangen voor veilige afsluiting
 signal.signal(signal.SIGTERM, handle_exit)
 signal.signal(signal.SIGINT, handle_exit)
-
-# 📌 Configuratie-instellingen voor notificaties
-def load_notification_settings():
-    if os.path.exists("config.json"):
-        with open("config.json", "r") as file:
-            return json.load(file)
-    return {}
-
-# 📌 Notificatie naar dashboard sturen
-def send_notification(message_type, message):
-    settings = load_notification_settings()
-    if settings.get(message_type, False):
-        socketio.emit('new_notification', {'type': message_type, 'message': message})
 
 # 📌 Verbinding maken met Bybit API
 def connect_to_bybit():
@@ -65,90 +53,46 @@ def connect_to_bybit():
     
     return exchange
 
-# 📌 Functie om de actuele prijs op te halen
-def get_current_price(symbol, retries=3):
-    exchange = connect_to_bybit()
-    try:
-        ticker = exchange.fetch_ticker(symbol)
-        return ticker['last']
-    except ccxt.NetworkError as e:
-        logging.warning(f"Netwerkfout bij ophalen van prijs voor {symbol}: {e}")
-        if retries > 0:
-            time.sleep(2)
-            return get_current_price(symbol, retries - 1)
-    except ccxt.BaseError as e:
-        logging.warning(f"Fout bij ophalen van prijs voor {symbol}: {e}")
-    return None
-
-# 📌 Functie om accountbalans op te halen
+# 📌 Functie om accountbalans op te halen en lokaal op te slaan
 def fetch_account_balance():
     exchange = connect_to_bybit()
     try:
         balance = exchange.fetch_balance()
-        return {'total': {'USDT': balance['total'].get('USDT', 0)}}
+        usdt_balance = balance['total'].get('USDT', 0)
+        
+        # Opslaan in lokaal bestand
+        with open(BALANCE_FILE, "w") as file:
+            json.dump({"USDT": usdt_balance}, file)
+        
+        return {'total': {'USDT': usdt_balance}}
     except (ccxt.NetworkError, ccxt.BaseError) as e:
         logging.warning(f"Fout bij het ophalen van saldo: {e}")
+        
+        # Laatste bekende balans ophalen als API faalt
+        if os.path.exists(BALANCE_FILE):
+            with open(BALANCE_FILE, "r") as file:
+                return {'total': json.load(file)}
+        
         return {'total': {'USDT': 0}}
 
-# 📌 Functie om actieve trades op te halen
-def get_active_trades():
-    exchange = connect_to_bybit()
-    try:
-        active_trades = exchange.fetch_open_orders(symbol='BTC/USDT')
-        return [{'symbol': order['symbol'], 'status': order['status']} for order in active_trades]
-    except Exception as e:
-        logging.warning(f"Fout bij het ophalen van actieve trades: {e}")
-        return []
-
-# 📌 Plaats een koop- of verkooporder
-def place_order(symbol, side, amount):
-    exchange = connect_to_bybit()
-    try:
-        return exchange.create_market_order(symbol, side, amount)
-    except Exception as e:
-        logging.warning(f"Fout bij order {symbol}: {e}")
-        return None
-
-# 📌 Simulatie van trades
-def trade_simulation():
-    global running
-    while running:
-        symbol = random.choice(TRADING_SYMBOLS)
-        current_price = get_current_price(symbol)
-        if current_price is None:
-            continue
-        balance = fetch_account_balance()
-        amount_to_trade = balance['total']['USDT'] * TRADE_PERCENTAGE / current_price
-        profit_or_loss = random.uniform(-STOP_LOSS_PERCENTAGE, TAKE_PROFIT_PERCENTAGE)
-        if profit_or_loss > 0:
-            place_order(symbol, 'buy', amount_to_trade)
-            send_notification("notify_profit", f"Trade op {symbol} - Winst: {profit_or_loss}%")
-        elif profit_or_loss < 0:
-            place_order(symbol, 'sell', amount_to_trade)
-            send_notification("notify_loss", f"Trade op {symbol} - Verlies: {profit_or_loss}%")
-        time.sleep(5)
-
-# 📌 Bot starten
-def start_bot():
-    global running
-    while running:
-        trade_simulation()
+# 📌 Verzend dashboardgegevens
+def send_dashboard_data():
+    balance = fetch_account_balance()
+    active_trades = get_active_trades()
+    
+    socketio.emit('update_balance', {'balance': balance['total']['USDT']})
+    socketio.emit('update_trades', {'trades': active_trades})
+    logging.info(f"Dashboard geüpdatet: Balans {balance['total']['USDT']} USDT")
 
 # 📌 Start bot en update dashboard periodiek
 def start():
     global running
     thread = threading.Thread(target=start_bot)
     thread.start()
+    
     while running:
         send_dashboard_data()
         time.sleep(10)
-
-# 📌 Verzend dashboardgegevens
-def send_dashboard_data():
-    balance = fetch_account_balance()
-    active_trades = get_active_trades()
-    socketio.emit('update_balance', {'balance': balance['total']['USDT']})
-    socketio.emit('update_trades', {'trades': active_trades})
 
 if __name__ == "__main__":
     print("Lucky13 Bot gestart!")

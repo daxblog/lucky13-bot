@@ -9,6 +9,8 @@ import ccxt
 import logging
 from flask_socketio import SocketIO
 from flask import Flask
+import eventlet
+import eventlet.wsgi
 
 # Logging setup
 DEBUG_MODE = False  # Zet op True voor gedetailleerde logs
@@ -20,7 +22,7 @@ logging.basicConfig(
 )
 
 # Flask setup
-app = Flask(__name__)
+app = Flask(_name_)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Trading instellingen
@@ -152,15 +154,15 @@ def start():
     threading.Thread(target=start_bot, daemon=True).start()
     threading.Thread(target=dashboard_updater, daemon=True).start()
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     print("Lucky13 Bot gestart!")
     start()
+
+    # 📌 Heroku gebruikt een dynamische poort
     port = int(os.environ.get("PORT", 5000))
-    import eventlet
-eventlet.monkey_patch()  # Nodig voor compatibiliteit met Flask en SocketIO
 
-socketio.run(app, host="0.0.0.0", port=port, debug=DEBUG_MODE, server='eventlet')
-
+    # 📌 Gebruik eventlet WSGI server om de Flask-app in productie te draaien
+    eventlet.wsgi.server(eventlet.listen(("0.0.0.0", port)), app)
 
     print("Bot is gestopt.")
     sys.exit(0)

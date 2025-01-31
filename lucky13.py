@@ -11,19 +11,47 @@ from flask import Flask
 import eventlet
 import eventlet.wsgi
 
-# Logging setup (Fix Unicode probleem door UTF-8 encoding)
+# Logging setup (Console, bestand en WebSocket)
 DEBUG_MODE = False
 LOG_FILE = "bot.log"
 
-logging.basicConfig(
-    level=logging.DEBUG if DEBUG_MODE else logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler(sys.stdout)]
-)
+# Stel de log formatter in
+log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+# Configureer het loggen naar bestand
+file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
+
+# Configureer het loggen naar de console (CMD)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
+
+# Voeg een custom SocketIO handler toe
+class SocketIOHandler(logging.Handler):
+    def __init__(self, socketio):
+        super().__init__()
+        self.socketio = socketio
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.socketio.emit('log_message', {'log': log_entry})  # Stuur log naar front-end via WebSocket
 
 # Flask setup
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Voeg de SocketIOHandler toe aan de logging configuratie
+socket_handler = SocketIOHandler(socketio)
+socket_handler.setFormatter(log_formatter)
+logging.getLogger().addHandler(socket_handler)
+
+# Voeg file en console handler toe aan root logger
+logging.basicConfig(
+    level=logging.DEBUG if DEBUG_MODE else logging.INFO,
+    handlers=[file_handler, console_handler, socket_handler]
+)
 
 # Trading instellingen
 TRADING_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']

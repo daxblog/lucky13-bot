@@ -6,54 +6,47 @@ import sys
 import json
 import ccxt
 import logging
+import requests  # Voor Slack notificaties
+import talib  # Bibliotheek voor technische analyse
+import numpy as np
 from flask_socketio import SocketIO
 from flask import Flask
 import eventlet
 import eventlet.wsgi
-import requests
-import talib  # Bibliotheek voor technische analyse
-import numpy as np
 
-# Logging setup (Console, bestand en WebSocket)
+# Slack Webhook URL
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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”
+
+# Functie om Slack notificaties te verzenden
+def send_slack_notification(message):
+    try:
+        payload = {"text": message}
+        response = requests.post(SLACK_WEBHOOK_URL, json=payload)
+        if response.status_code != 200:
+            logging.error(f"Slack notificatie mislukt: {response.text}")
+    except Exception as e:
+        logging.error(f"Fout bij verzenden Slack notificatie: {e}")
+
+# Logging setup
 DEBUG_MODE = False
 LOG_FILE = "bot.log"
 
-# Stel de log formatter in
 log_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
-# Configureer het loggen naar bestand
 file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
 file_handler.setFormatter(log_formatter)
 file_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
-# Configureer het loggen naar de console (CMD)
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(log_formatter)
 console_handler.setLevel(logging.DEBUG if DEBUG_MODE else logging.INFO)
 
-# Voeg een custom SocketIO handler toe
-class SocketIOHandler(logging.Handler):
-    def __init__(self, socketio):
-        super().__init__()
-        self.socketio = socketio
-
-    def emit(self, record):
-        log_entry = self.format(record)
-        self.socketio.emit('log_message', {'log': log_entry})  # Stuur log naar front-end via WebSocket
-
-# Flask setup
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Voeg de SocketIOHandler toe aan de logging configuratie
-socket_handler = SocketIOHandler(socketio)
-socket_handler.setFormatter(log_formatter)
-logging.getLogger().addHandler(socket_handler)
-
-# Voeg file en console handler toe aan root logger
 logging.basicConfig(
     level=logging.DEBUG if DEBUG_MODE else logging.INFO,
-    handlers=[file_handler, console_handler, socket_handler]
+    handlers=[file_handler, console_handler]
 )
 
 # Trading instellingen
@@ -61,100 +54,69 @@ TRADING_SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'XRP/USDT']
 TRADE_PERCENTAGE = 0.02
 STOP_LOSS_PERCENTAGE = 0.03
 TAKE_PROFIT_PERCENTAGE = 0.05
-
-BALANCE_FILE = "balance.json"
-WINNINGS_FILE = "winnings.json"
 running = True
 
 # SIGTERM-signaal afvangen voor veilige afsluiting
 def handle_exit(sig, frame):
     global running
     logging.info("Bot wordt gestopt...")
+    send_slack_notification("🚨 Lucky13 bot wordt gestopt...")
     running = False
 
 signal.signal(signal.SIGTERM, handle_exit)
 signal.signal(signal.SIGINT, handle_exit)
 
-# Verbinding maken met Bybit API
+# Bybit API verbinding
 def connect_to_bybit():
     api_key = os.getenv("BYBIT_API_KEY")
     api_secret = os.getenv("BYBIT_API_SECRET")
 
     if not api_key or not api_secret:
-        logging.error("API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
+        logging.error("API-sleutels ontbreken!")
+        send_slack_notification("❌ Fout: Bybit API-sleutels ontbreken!")
         sys.exit(1)
 
     try:
-        exchange = ccxt.bybit({
-            'apiKey': api_key,
-            'secret': api_secret,
-        })
-        return exchange
+        return ccxt.bybit({'apiKey': api_key, 'secret': api_secret})
     except Exception as e:
         logging.error(f"Fout bij verbinden met Bybit API: {e}")
+        send_slack_notification(f"❌ Fout bij Bybit API: {e}")
         sys.exit(1)
 
-# Functie om accountbalans rechtstreeks uit Bybit te halen met retry-mechanisme
+# Haal balans op uit Bybit
 def fetch_account_balance():
     exchange = connect_to_bybit()
-    max_retries = 3  # Aantal keren dat de bot opnieuw probeert bij een fout
-    retry_delay = 5  # Wacht 5 seconden tussen pogingen
+    try:
+        balance = exchange.fetch_balance()
+        usdt_balance = balance['total'].get('USDT', 0)
+        return {'total': usdt_balance}
+    except Exception as e:
+        logging.error(f"Fout bij ophalen balans: {e}")
+        send_slack_notification(f"❌ Balans ophalen mislukt: {e}")
+        return {'total': 0}
 
-    for attempt in range(1, max_retries + 1):
-        try:
-            balance = exchange.fetch_balance()
-            usdt_balance = balance['total'].get('USDT', 0)  # Haal alleen USDT saldo op
-            logging.info(f"[INFO] Balans succesvol opgehaald uit Bybit: {usdt_balance} USDT")
-            socketio.emit('update_balance', {'balance': usdt_balance})  # Realtime update via WebSocket
-            return {'total': usdt_balance}
-
-        except (ccxt.NetworkError, ccxt.BaseError) as e:
-            logging.warning(f"[WAARSCHUWING] Poging {attempt}/{max_retries} mislukt bij ophalen balans: {e}")
-            
-            if attempt < max_retries:
-                logging.info(f"[INFO] Nieuwe poging binnen {retry_delay} seconden...")
-                time.sleep(retry_delay)
-            else:
-                logging.error("[FOUT] Alle pogingen om de balans op te halen zijn mislukt. Bybit API mogelijk onbereikbaar.")
-                return {'total': 0}  # Zet balans op 0 bij mislukking
-
-# Simuleer het ophalen van de huidige prijs
+# Simuleer prijs ophalen
 def get_current_price(symbol):
     return round(random.uniform(20000, 50000), 2) if symbol == "BTC/USDT" else round(random.uniform(1000, 4000), 2)
 
-# Functie voor het berekenen van technische indicatoren
+# Bereken technische indicatoren
 def calculate_technical_indicators(symbol):
-    # Simuleer prijsdata voor technische analyse (zou normaal uit de API komen)
-    close_prices = [get_current_price(symbol) for _ in range(50)]  # Neemt de laatste 50 prijzen
-
-    # Bereken SMA en RSI via talib
+    close_prices = [get_current_price(symbol) for _ in range(50)]
     sma = talib.SMA(np.array(close_prices), timeperiod=14)
     rsi = talib.RSI(np.array(close_prices), timeperiod=14)
+    return sma[-1] if sma[-1] is not None else 0, rsi[-1] if rsi[-1] is not None else 0
 
-    # Simuleer de meest recente waarde van de indicatoren
-    sma_value = sma[-1] if sma[-1] is not None else 0
-    rsi_value = rsi[-1] if rsi[-1] is not None else 0
-
-    return sma_value, rsi_value
-
-# Functie om de trend te analyseren
+# Analyseer of het een goed moment is om te traden
 def is_good_trade(symbol):
     sma_value, rsi_value = calculate_technical_indicators(symbol)
-
     logging.info(f"SMA: {sma_value}, RSI: {rsi_value}")
+    return rsi_value < 30 and get_current_price(symbol) > sma_value
 
-    # Trendanalyse (bijvoorbeeld, koop wanneer RSI < 30 en de prijs boven SMA is)
-    if rsi_value < 30 and get_current_price(symbol) > sma_value:
-        logging.info(f"Goed moment om te handelen: {symbol}")
-        return True
-    else:
-        logging.info(f"Geen goed moment om te handelen: {symbol}")
-        return False
-
-# Trading-logica met trailing stop loss
+# Start de trading bot
 def start_bot():
     global running
-    logging.info("Trading bot gestart en actief...")
+    logging.info("Trading bot gestart...")
+    send_slack_notification("✅ Lucky13 bot is gestart!")
 
     open_trades = {}
     while running:
@@ -163,11 +125,11 @@ def start_bot():
         usdt_balance = balance['total']
 
         if usdt_balance < 10:
-            logging.warning(f"Portfolio te laag: slechts {usdt_balance} USDT beschikbaar.")
+            logging.warning("❌ Te weinig saldo om te traden.")
+            send_slack_notification(f"❌ Te laag saldo: {usdt_balance} USDT")
             time.sleep(5)
             continue
 
-        # Controleer of de trade een goed moment is
         if not is_good_trade(symbol):
             time.sleep(5)
             continue
@@ -178,10 +140,10 @@ def start_bot():
         stop_loss_price = current_price * (1 - STOP_LOSS_PERCENTAGE)
         take_profit_price = current_price * (1 + TAKE_PROFIT_PERCENTAGE)
 
-        logging.info(f"Nieuwe trade op {symbol} geopend tegen {current_price} USDT. "
-                     f"SL: {stop_loss_price} USDT, TP: {take_profit_price} USDT. "
-                     f"Totale investering: {investment} USDT")
-        
+        logging.info(f"Nieuwe trade op {symbol}: {current_price} USDT")
+        send_slack_notification(f"📈 Nieuwe trade: {symbol} @ {current_price} USDT\n"
+                                f"🎯 TP: {take_profit_price} | 🛑 SL: {stop_loss_price}")
+
         open_trades[symbol] = {
             "entry_price": current_price,
             "stop_loss": stop_loss_price,
@@ -190,7 +152,6 @@ def start_bot():
 
         time.sleep(5)
 
-        # Simuleer trade-afhandeling met trailing stop loss
         while running and symbol in open_trades:
             final_price = get_current_price(symbol)
             profit = final_price - current_price
@@ -198,23 +159,24 @@ def start_bot():
 
             logging.info(f"{symbol} huidige prijs: {final_price} USDT, winst/verlies: {percentage_change:.2f}%")
 
-            # **Trailing Stop Loss Logica**
+            # Trailing Stop Loss
             if final_price > open_trades[symbol]["entry_price"]:
                 new_stop_loss = final_price * (1 - STOP_LOSS_PERCENTAGE)
-                if new_stop_loss > open_trades[symbol]["stop_loss"]:  # Alleen verhogen
+                if new_stop_loss > open_trades[symbol]["stop_loss"]:
                     open_trades[symbol]["stop_loss"] = new_stop_loss
-                    logging.info(f"Nieuwe trailing stop loss voor {symbol}: {new_stop_loss:.2f} USDT")
+                    logging.info(f"📉 Nieuwe SL voor {symbol}: {new_stop_loss} USDT")
 
-            # Trade sluiten als stop loss of take profit bereikt is
+            # Trade sluiten bij SL of TP
             if final_price <= open_trades[symbol]["stop_loss"] or final_price >= open_trades[symbol]["take_profit"]:
-                logging.info(f"Trade op {symbol} gesloten tegen {final_price} USDT. "
-                             f"Winst/verlies: {profit:.2f} USDT ({percentage_change:.2f}%)")
+                logging.info(f"Trade gesloten: {symbol} @ {final_price} USDT")
+                send_slack_notification(f"💰 Trade gesloten: {symbol} @ {final_price} USDT\n"
+                                        f"🔹 Winst/Verlies: {profit:.2f} USDT ({percentage_change:.2f}%)")
                 del open_trades[symbol]
-                break  # Stop de loop en begin een nieuwe trade
+                break
 
             time.sleep(5)
 
-# Start de bot in de achtergrond
+# Start de bot
 def start():
     socketio.start_background_task(start_bot)
 
@@ -224,4 +186,5 @@ if __name__ == "__main__":
     start()
     socketio.run(app, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
     logging.info("Bot is gestopt.")
+    send_slack_notification("⛔ Lucky13 bot is gestopt.")
     sys.exit(0)

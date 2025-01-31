@@ -1,7 +1,6 @@
 import subprocess
 import os
 import json
-import random
 import logging
 from flask import Flask, jsonify, request, render_template
 from flask_socketio import SocketIO
@@ -91,6 +90,13 @@ def update_bot_status_periodically():
 
     socketio.start_background_task(run)
 
+# ✅ Nieuwe route voor logberichten
+@socketio.on('log_message')
+def handle_log_message(data):
+    log_message = data.get('log', '')
+    logging.info(f"Logbericht van bot: {log_message}")
+    socketio.emit('log_message', {'log': log_message})
+
 # ✅ Bot starten
 @app.route("/start-bot", methods=["POST"])
 def start_bot():
@@ -101,10 +107,21 @@ def start_bot():
     try:
         BOT_PROCESS = subprocess.Popen(
             ["python", BOT_SCRIPT],
-            stdout=subprocess.DEVNULL,  # ✅ Vermijd mogelijke buffer-blokkades
-            stderr=subprocess.DEVNULL,  # ✅ Vermijd mogelijke buffer-blokkades
+            stdout=subprocess.PIPE,  # Log naar stdout
+            stderr=subprocess.PIPE,  # Log naar stderr
             universal_newlines=True
         )
+        
+        # Logberichten van de bot doorsturen naar het dashboard via WebSocket
+        def log_output(stream):
+            for line in iter(stream.readline, ''):
+                socketio.emit('log_message', {'log': line.strip()})
+            stream.close()
+
+        # Start loggen van stdout en stderr
+        socketio.start_background_task(log_output, BOT_PROCESS.stdout)
+        socketio.start_background_task(log_output, BOT_PROCESS.stderr)
+
         logging.info("✅ Bot gestart!")
         socketio.emit('bot_status', {'running': True})  
         return jsonify({"status": "✅ Bot gestart!"})

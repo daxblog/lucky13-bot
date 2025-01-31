@@ -49,10 +49,6 @@ def connect_to_bybit():
     api_key = os.getenv("BYBIT_API_KEY")
     api_secret = os.getenv("BYBIT_API_SECRET")
 
-    # Log de API-sleutels om te controleren of ze goed geladen worden
-    logging.info(f"API Key: {api_key}")
-    logging.info(f"API Secret: {api_secret}")
-
     if not api_key or not api_secret:
         logging.error("API-sleutels ontbreken! Zorg ervoor dat de environment variables correct zijn ingesteld.")
         sys.exit(1)
@@ -67,36 +63,35 @@ def connect_to_bybit():
         logging.error(f"Fout bij verbinden met Bybit API: {e}")
         sys.exit(1)
 
-# Functie om accountbalans op te halen
+# Functie om accountbalans rechtstreeks uit Bybit te halen met retry-mechanisme
 def fetch_account_balance():
     exchange = connect_to_bybit()
-    try:
-        balance = exchange.fetch_balance()
-        logging.info(f"Balans opgehaald: {balance}")  # Log volledige balansinformatie
-        usdt_balance = balance['total'].get('USDT', 0)
-        logging.info(f"USDT balans: {usdt_balance}")  # Log alleen de USDT balans
-        with open(BALANCE_FILE, "w", encoding="utf-8") as file:
-            json.dump({"USDT": usdt_balance}, file)
-        socketio.emit('update_balance', {'balance': usdt_balance})
-        return {'total': usdt_balance}
-    except (ccxt.NetworkError, ccxt.BaseError) as e:
-        logging.warning(f"Fout bij ophalen saldo: {e}")
-        if os.path.exists(BALANCE_FILE):
-            with open(BALANCE_FILE, "r", encoding="utf-8") as file:
-                try:
-                    balance_data = json.load(file)
-                    logging.warning(f"Gebruik van lokaal opgeslagen saldo: {balance_data.get('USDT', 0)}")
-                    return {'total': balance_data.get("USDT", 0)}
-                except json.JSONDecodeError:
-                    logging.error("Error bij het lezen van lokaal saldo bestand. Zet saldo op 0.")
-                    return {'total': 0}
-        return {'total': 0}
+    max_retries = 3  # Aantal keren dat de bot opnieuw probeert bij een fout
+    retry_delay = 5  # Wacht 5 seconden tussen pogingen
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            balance = exchange.fetch_balance()
+            usdt_balance = balance['total'].get('USDT', 0)  # Haal alleen USDT saldo op
+            logging.info(f"[INFO] Balans succesvol opgehaald uit Bybit: {usdt_balance} USDT")
+            socketio.emit('update_balance', {'balance': usdt_balance})  # Realtime update via WebSocket
+            return {'total': usdt_balance}
+
+        except (ccxt.NetworkError, ccxt.BaseError) as e:
+            logging.warning(f"[WAARSCHUWING] Poging {attempt}/{max_retries} mislukt bij ophalen balans: {e}")
+            
+            if attempt < max_retries:
+                logging.info(f"[INFO] Nieuwe poging binnen {retry_delay} seconden...")
+                time.sleep(retry_delay)
+            else:
+                logging.error("[FOUT] Alle pogingen om de balans op te halen zijn mislukt. Bybit API mogelijk onbereikbaar.")
+                return {'total': 0}  # Zet balans op 0 bij mislukking
 
 # Simuleer het ophalen van de huidige prijs
 def get_current_price(symbol):
     return round(random.uniform(20000, 50000), 2) if symbol == "BTC/USDT" else round(random.uniform(1000, 4000), 2)
 
-# Trading-logica
+# Trading-logica met trailing stop loss
 def start_bot():
     global running
     logging.info("Trading bot gestart en actief...")
@@ -130,18 +125,29 @@ def start_bot():
 
         time.sleep(5)
 
-        # Simuleer trade-afhandeling
-        final_price = get_current_price(symbol)
-        profit = final_price - current_price
-        percentage_change = (profit / current_price) * 100
-        logging.info(f"{symbol} huidige winst/verlies: {percentage_change:.2f}% ten opzichte van investering.")
-        
-        if final_price <= stop_loss_price or final_price >= take_profit_price:
-            logging.info(f"Trade op {symbol} gesloten tegen {final_price} USDT. "
-                         f"Winst/verlies: {profit:.2f} USDT ({percentage_change:.2f}%)")
-            del open_trades[symbol]
+        # Simuleer trade-afhandeling met trailing stop loss
+        while running and symbol in open_trades:
+            final_price = get_current_price(symbol)
+            profit = final_price - current_price
+            percentage_change = (profit / current_price) * 100
 
-        time.sleep(5)
+            logging.info(f"{symbol} huidige prijs: {final_price} USDT, winst/verlies: {percentage_change:.2f}%")
+
+            # **Trailing Stop Loss Logica**
+            if final_price > open_trades[symbol]["entry_price"]:
+                new_stop_loss = final_price * (1 - STOP_LOSS_PERCENTAGE)
+                if new_stop_loss > open_trades[symbol]["stop_loss"]:  # Alleen verhogen
+                    open_trades[symbol]["stop_loss"] = new_stop_loss
+                    logging.info(f"Nieuwe trailing stop loss voor {symbol}: {new_stop_loss:.2f} USDT")
+
+            # Trade sluiten als stop loss of take profit bereikt is
+            if final_price <= open_trades[symbol]["stop_loss"] or final_price >= open_trades[symbol]["take_profit"]:
+                logging.info(f"Trade op {symbol} gesloten tegen {final_price} USDT. "
+                             f"Winst/verlies: {profit:.2f} USDT ({percentage_change:.2f}%)")
+                del open_trades[symbol]
+                break  # Stop de loop en begin een nieuwe trade
+
+            time.sleep(5)
 
 # Start de bot in de achtergrond
 def start():

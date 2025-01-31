@@ -104,7 +104,7 @@
     }
 
     // WebSocket om de botstatus te ontvangen
-    socket.on('update_bot_status', (data) => {
+    socket.on('bot_status', (data) => {
         updateBotStatus(data.running);  // Gebruik de ontvangen status om de UI bij te werken
     });
 
@@ -158,8 +158,6 @@
     // Initialiseer de grafiek bij het laden van de pagina
     socket.emit('request_graph_data'); // Vraag om de grafiekdata bij de server opstart
 
-    // Periodieke grafiek update elke 30 seconden (wordt nu beheerd via socket)
-    // setInterval(updateGraph, 30000);  // Dit is niet nodig omdat de grafiek nu via socket.io wordt bijgewerkt
 </script>
 
 </body>

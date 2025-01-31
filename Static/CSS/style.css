@@ -9,13 +9,13 @@ body {
 
 /* Header-styling */
 header {
-    background-color: #6f42c1; /* Paars voor de header */
+    background-color: #4b2e99; /* Donkerpaars voor de header */
     color: white;
     padding: 20px;
     text-align: center;
     font-weight: 700;
     font-size: 2rem;
-    border-bottom: 5px solid #4b2e99; /* Donkerder paars voor contrast */
+    border-bottom: 5px solid #6f42c1; /* Lichter paars voor contrast */
 }
 
 /* Container voor de content */
@@ -65,8 +65,8 @@ header {
 }
 
 .failure {
-    background-color: #dc3545; /* Rood voor mislukking */
-    color: white;
+    background-color: #f8d7da; /* Lichte rode tint voor falen, vervangen van fel rood */
+    color: #721c24; /* Donkerder rood voor leesbaarheid */
 }
 
 /* Styling voor de grafiek */
@@ -104,11 +104,11 @@ button {
 }
 
 .stop-button {
-    background-color: #000; /* Zwart voor stoppen */
+    background-color: #343a40; /* Donkergrijs voor stoppen in plaats van zwart */
 }
 
 .stop-button:hover {
-    background-color: #444; /* Donkerder zwart voor hover */
+    background-color: #23272b; /* Nog donkerder grijs voor hover */
     transform: translateY(-2px);
 }
 
@@ -158,8 +158,8 @@ button {
 }
 
 .trade-item.failure {
-    background-color: #dc3545; /* Rood voor verlies */
-    color: white;
+    background-color: #f8d7da; /* Lichte rode tint voor verlies */
+    color: #721c24; /* Donkerder rood voor leesbaarheid */
 }
 
 .trade-item span {

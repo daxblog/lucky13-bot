@@ -10,6 +10,9 @@ from flask_socketio import SocketIO
 from flask import Flask
 import eventlet
 import eventlet.wsgi
+import requests
+import talib  # Bibliotheek voor technische analyse
+import numpy as np
 
 # Logging setup (Console, bestand en WebSocket)
 DEBUG_MODE = False
@@ -119,6 +122,35 @@ def fetch_account_balance():
 def get_current_price(symbol):
     return round(random.uniform(20000, 50000), 2) if symbol == "BTC/USDT" else round(random.uniform(1000, 4000), 2)
 
+# Functie voor het berekenen van technische indicatoren
+def calculate_technical_indicators(symbol):
+    # Simuleer prijsdata voor technische analyse (zou normaal uit de API komen)
+    close_prices = [get_current_price(symbol) for _ in range(50)]  # Neemt de laatste 50 prijzen
+
+    # Bereken SMA en RSI via talib
+    sma = talib.SMA(np.array(close_prices), timeperiod=14)
+    rsi = talib.RSI(np.array(close_prices), timeperiod=14)
+
+    # Simuleer de meest recente waarde van de indicatoren
+    sma_value = sma[-1] if sma[-1] is not None else 0
+    rsi_value = rsi[-1] if rsi[-1] is not None else 0
+
+    return sma_value, rsi_value
+
+# Functie om de trend te analyseren
+def is_good_trade(symbol):
+    sma_value, rsi_value = calculate_technical_indicators(symbol)
+
+    logging.info(f"SMA: {sma_value}, RSI: {rsi_value}")
+
+    # Trendanalyse (bijvoorbeeld, koop wanneer RSI < 30 en de prijs boven SMA is)
+    if rsi_value < 30 and get_current_price(symbol) > sma_value:
+        logging.info(f"Goed moment om te handelen: {symbol}")
+        return True
+    else:
+        logging.info(f"Geen goed moment om te handelen: {symbol}")
+        return False
+
 # Trading-logica met trailing stop loss
 def start_bot():
     global running
@@ -132,6 +164,11 @@ def start_bot():
 
         if usdt_balance < 10:
             logging.warning(f"Portfolio te laag: slechts {usdt_balance} USDT beschikbaar.")
+            time.sleep(5)
+            continue
+
+        # Controleer of de trade een goed moment is
+        if not is_good_trade(symbol):
             time.sleep(5)
             continue
 

@@ -61,11 +61,22 @@
             width: 100%;
             height: 400px;
         }
+        /* Toevoegen van stijl voor logsectie */
+        #log-section {
+            background-color: #212529;
+            color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
 
-<header>Lucky13 - Trading Dashboard</header>
+<header>Lucky13</header>
 
 <div class="container">
     <div class="card">
@@ -84,6 +95,14 @@
     <div class="card">
         <h3>Winnings and Deposits Graph</h3>
         <canvas id="winningsChart"></canvas>
+    </div>
+    
+    <!-- Toevoegen van de logsectie -->
+    <div class="card">
+        <h3>Bot Logs</h3>
+        <div id="log-section">
+            <p>Loading logs...</p>
+        </div>
     </div>
 </div>
 
@@ -128,6 +147,19 @@
     // WebSocket om de gegevens voor winsten en stortingen voor de grafiek te ontvangen
     socket.on('update_graph', (data) => {
         updateChart(data.winnings, data.deposits);
+    });
+
+    // WebSocket om logs te ontvangen
+    socket.on('update_logs', data => {
+        const logSection = document.getElementById("log-section");
+        logSection.innerHTML = '';  // Maak de oude logs leeg
+        data.logs.forEach(log => {
+            const logMessage = document.createElement('p');
+            logMessage.textContent = log;
+            logSection.appendChild(logMessage);
+        });
+        // Zorg ervoor dat de logsectie altijd scrollt naar beneden
+        logSection.scrollTop = logSection.scrollHeight;
     });
 
     // Functie om de grafiek bij te werken

@@ -15,7 +15,7 @@ import eventlet
 import eventlet.wsgi
 
 # Slack Webhook URL
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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”
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 
 # Functie om Slack notificaties te verzenden
 def send_slack_notification(message):
